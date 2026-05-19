@@ -173,7 +173,7 @@ a.card:hover {
 .mascot-wrap {
   position: fixed; bottom: 24px; right: 24px;
   z-index: 100;
-  display: flex; flex-direction: column; align-items: flex-end; gap: 10px;
+  display: flex; flex-direction: row; align-items: flex-end; gap: 10px;
 }
 .chat-bubble {
   background: #fff; border-radius: 14px;
@@ -184,9 +184,9 @@ a.card:hover {
 }
 .chat-bubble::after {
   content: ''; position: absolute;
-  bottom: -8px; right: 28px;
-  border-width: 8px 8px 0; border-style: solid;
-  border-color: #fff transparent transparent;
+  right: -8px; bottom: 28px;
+  border-width: 8px 0 8px 8px; border-style: solid;
+  border-color: transparent transparent transparent #fff;
 }
 .mascot-img { width: 120px; height: auto; }
   </style>
