@@ -1,0 +1,39 @@
+# Cloudflare Pages security headers
+# Applied to every response from this site.
+# See: https://developers.cloudflare.com/pages/configuration/headers/
+
+/*
+  # Prevent this page from being embedded in iframes (clickjacking)
+  X-Frame-Options: DENY
+
+  # Block MIME-type sniffing (prevents content-type confusion attacks)
+  X-Content-Type-Options: nosniff
+
+  # Limit Referer header to origin only on cross-origin requests
+  Referrer-Policy: strict-origin-when-cross-origin
+
+  # Restrict browser feature access — nothing sensitive needed here
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+
+  # Force HTTPS for 2 years (Cloudflare already enforces HTTPS, but belt-and-suspenders)
+  Strict-Transport-Security: max-age=63072000; includeSubDomains
+
+  # Content Security Policy
+  # ───────────────────────────────────────────────────────────────────────────
+  # default-src 'none'         — deny everything not explicitly listed
+  # script-src 'unsafe-inline' — allows inline <script> blocks in both tools
+  #   + cdn.sheetjs.com        — SheetJS xlsx parser (SRI-pinned in bio tool HTML)
+  #   + cdnjs.cloudflare.com   — html2pdf.js (SRI-pinned in bio tool HTML)
+  # style-src 'unsafe-inline'  — allows inline <style> blocks
+  #   + fonts.googleapis.com   — Google Fonts stylesheet (calendar + bio tool)
+  # font-src fonts.gstatic.com — Google Fonts actual font files
+  # img-src data: blob:        — calendar logo embedded as data: URI; bio tool uses blob:
+  # connect-src cdnjs.cloudflare.com — html2pdf.js runtime fetch (bio tool)
+  # frame-ancestors 'none'     — belt-and-suspenders with X-Frame-Options
+  # base-uri 'none'            — prevent base tag injection
+  # form-action 'none'         — no forms submit anywhere
+  #
+  # NOTE on 'unsafe-inline': Both tools are static single-file apps with no
+  # server-side nonce generation. SRI on CDN scripts guards against supply-chain
+  # compromise. 'unsafe-inline' risk is acceptable in this context.
+  Content-Security-Policy: default-src 'none'; script-src 'unsafe-inline' https://cdn.sheetjs.com https://cdnjs.cloudflare.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob:; connect-src https://cdnjs.cloudflare.com; frame-ancestors 'none'; base-uri 'none'; form-action 'none';
