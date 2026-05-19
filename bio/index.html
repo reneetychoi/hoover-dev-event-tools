@@ -485,9 +485,53 @@
       }
       .rpt-foot { display: none !important; }
     }
-  </style>
+  
+/* Site navigation */
+.site-nav {
+  background: #fff;
+  border-bottom: 1px solid #e0d9d0;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  font-family: 'Chivo', system-ui, sans-serif;
+  font-size: 13px;
+}
+.site-nav-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 680px;
+  width: 100%;
+  margin: 0 auto;
+}
+.site-nav-brand {
+  color: #8C1515;
+  font-weight: 700;
+  text-decoration: none;
+  letter-spacing: .04em;
+  font-size: 12px;
+  text-transform: uppercase;
+}
+.site-nav-links { display: flex; gap: 24px; align-items: center; }
+.site-nav-links a { color: #292019; text-decoration: none; }
+.site-nav-links a:hover { color: #8C1515; }
+.site-nav-links a.active { color: #8C1515; font-weight: 700; }
+.nav-disabled { color: #9C9489; cursor: not-allowed; font-size: 12px; }
+</style>
 </head>
 <body>
+<nav class="site-nav">
+  <div class="site-nav-inner">
+    <a class="site-nav-brand" href="/">Hoover Development</a>
+    <div class="site-nav-links">
+      <a href="/calendar.html">Development Calendar</a>
+      <span class="nav-disabled" title="Coming soon">Board Calendar</span>
+      <a href="/bio/" class="active">Bio Report</a>
+    </div>
+  </div>
+</nav>
+
 
 <div class="top-bar" aria-hidden="true"></div>
 
