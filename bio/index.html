@@ -2,536 +2,37 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Bio Report Generator — Stanford</title>
-
-  <!-- Spectral (display + report body) + Chivo (UI chrome) -->
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Bio Report — Hoover Development</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Chivo:ital,wght@0,300;0,400;0,700;1,400&family=Spectral:ital,wght@0,200;0,300;0,400;0,600;1,200;1,300;1,400&display=swap" rel="stylesheet">
-
-  <!-- CDN libraries — pinned versions with SRI for supply-chain integrity.
-       Tailwind CDN omitted: not needed (all styles are custom CSS) and it
-       requires unsafe-eval which would weaken the Content-Security-Policy. -->
-  <script
-    src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"
-    integrity="sha384-EnyY0/GSHQGSxSgMwaIPzSESbqoOLSexfnSMN2AP+39Ckmn92stwABZynq1JyzdT"
-    crossorigin="anonymous"
-  ></script>
-
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Chivo:ital,wght@0,400;0,600;0,700;1,400&display=swap" rel="stylesheet">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
-    /* ─── Design Tokens ─────────────────────────────────────── */
-    :root {
-      /* Stanford Cardinal */
-      --brand:       #8C1515;
-      --brand-dark:  #6D1010;
-      --brand-light: #F4ECEC;
-
-      /* Backgrounds — warm */
-      --bg:          #F7F5F3;
-      --surface:     #FEFEFE;
-      --surface-alt: #F5F2EF;
-
-      /* Text */
-      --text:        #292019;
-      --text-mid:    #60574A;
-      --text-dim:    #9C9489;
-
-      /* Borders */
-      --border:      #DDD9D4;
-      --border-mid:  #C3BDB7;
-
-      /* Status */
-      --ok:          #2C8B49;
-      --warn:        #C0A025;
-
-      /* Spacing (4pt scale) */
-      --s1:  4px;  --s2:  8px;  --s3: 12px;  --s4: 16px;
-      --s6: 24px;  --s8: 32px;  --s12: 48px; --s16: 64px;
-
-      /* Type */
-      --ff-ui:      'Chivo', system-ui, sans-serif;
-      --ff-display: 'Spectral', Georgia, serif;
-
-      /* Fixed type scale for app UI (no fluid sizing in product UI) */
-      --tx-xs:   0.6875rem;  /* 11px */
-      --tx-sm:   0.8125rem;  /* 13px */
-      --tx-base: 1rem;        /* 16px */
-      --tx-lg:   1.25rem;    /* 20px */
-      --tx-xl:   1.75rem;    /* 28px */
-    }
-
-    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-    html { font-size: 16px; font-kerning: normal; }
-
-    body {
-      font-family: var(--ff-ui);
-      background: var(--bg);
-      color: var(--text);
-      min-height: 100vh;
-      -webkit-font-smoothing: antialiased;
-    }
-
-    /* ─── Top accent bar ──────────────────────────────────────── */
-    .top-bar {
-      position: fixed; top: 0; left: 0; right: 0;
-      height: 3px;
-      background: var(--brand);
-      z-index: 100;
-    }
-
-    /* ─── App shell ───────────────────────────────────────────── */
-    .app {
-      max-width: 680px;
-      margin: 0 auto;
-      padding: var(--s16) var(--s6) var(--s12);
-    }
-
-    /* ─── Header ──────────────────────────────────────────────── */
-    .app-header {
-      text-align: center;
-      margin-bottom: var(--s12);
-    }
-
-    .stanford-mark {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--s2);
-      margin-bottom: var(--s6);
-    }
-
-    .mark-dot {
-      width: 7px; height: 7px;
-      border-radius: 50%;
-      background: var(--brand);
-    }
-
-    .mark-label {
-      font-family: var(--ff-ui);
-      font-size: var(--tx-xs);
-      font-weight: 400;
-      letter-spacing: 0.16em;
-      text-transform: uppercase;
-      color: var(--text-dim);
-    }
-
-    .app-title {
-      font-family: var(--ff-display);
-      font-size: var(--tx-xl);
-      font-weight: 300;
-      color: var(--text);
-      line-height: 1.2;
-      letter-spacing: -0.015em;
-      margin-bottom: var(--s2);
-    }
-
-    .app-title em {
-      font-style: italic;
-      color: var(--brand);
-    }
-
-    .app-desc {
-      font-size: var(--tx-sm);
-      color: var(--text-dim);
-      font-weight: 300;
-      line-height: 1.6;
-      max-width: 52ch;
-      margin: 0 auto;
-    }
-
-    .privacy-note {
-      display: inline-flex;
-      align-items: center;
-      gap: var(--s2);
-      font-size: var(--tx-xs);
-      color: var(--text-dim);
-      margin-top: var(--s4);
-    }
-
-    .privacy-dot {
-      width: 6px; height: 6px;
-      border-radius: 50%;
-      background: var(--ok);
-      flex-shrink: 0;
-    }
-
-    /* ─── Card ────────────────────────────────────────────────── */
-    .card {
-      background: var(--surface);
-      border: 1px solid var(--border);
-      padding: var(--s8);
-    }
-
-    /* ─── Form fields ─────────────────────────────────────────── */
-    .field-label {
-      display: block;
-      font-size: var(--tx-xs);
-      font-weight: 700;
-      letter-spacing: 0.10em;
-      text-transform: uppercase;
-      color: var(--text-mid);
-      margin-bottom: var(--s2);
-    }
-
-    .text-input {
-      display: block;
-      width: 100%;
-      font-family: var(--ff-display);
-      font-size: var(--tx-lg);
-      font-weight: 300;
-      color: var(--text);
-      background: transparent;
-      border: none;
-      border-bottom: 1px solid var(--border-mid);
-      padding: var(--s2) 0 var(--s3);
-      outline: none;
-      transition: border-color 0.18s ease;
-      letter-spacing: -0.01em;
-    }
-
-    .text-input::placeholder {
-      color: var(--border-mid);
-      font-style: italic;
-    }
-
-    .text-input:focus { border-color: var(--brand); }
-
-    .rule { height: 1px; background: var(--border); margin: var(--s8) 0; }
-
-    /* ─── Drop zone ───────────────────────────────────────────── */
-    .drop-zone {
-      position: relative;
-      padding: var(--s12) var(--s6);
-      text-align: center;
-      cursor: pointer;
-      background: var(--surface-alt);
-      border: 1.5px dashed var(--border-mid);
-      transition: border-color 0.2s ease, background 0.2s ease;
-    }
-
-    .drop-zone:hover,
-    .drop-zone.over {
-      border-color: var(--brand);
-      border-style: solid;
-      background: var(--brand-light);
-    }
-
-    .drop-zone input[type="file"] {
-      position: absolute; inset: 0;
-      width: 100%; height: 100%;
-      opacity: 0; cursor: pointer;
-    }
-
-    .drop-icon {
-      width: 34px; height: 34px;
-      margin: 0 auto var(--s4);
-      color: var(--text-dim);
-    }
-
-    .drop-primary {
-      font-family: var(--ff-display);
-      font-size: var(--tx-base);
-      font-style: italic;
-      color: var(--text-mid);
-      margin-bottom: var(--s1);
-    }
-
-    .drop-secondary {
-      font-size: var(--tx-xs);
-      color: var(--text-dim);
-    }
-
-    .drop-secondary strong {
-      color: var(--brand);
-      font-weight: 400;
-      text-decoration: underline;
-      text-underline-offset: 2px;
-    }
-
-    /* ─── Error banner ────────────────────────────────────────── */
-    .error-banner {
-      display: none;
-      font-size: var(--tx-sm);
-      color: #831515;
-      background: #FAECEC;
-      padding: var(--s3) var(--s4);
-      margin-top: var(--s4);
-    }
-
-    /* ─── Preview ─────────────────────────────────────────────── */
-    .preview {
-      display: none;
-      margin-top: var(--s6);
-      animation: rise 0.25s ease;
-    }
-
-    @keyframes rise {
-      from { opacity: 0; transform: translateY(6px); }
-      to   { opacity: 1; transform: translateY(0); }
-    }
-
-    .preview-bar {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: var(--s3);
-    }
-
-    .preview-count {
-      font-size: var(--tx-sm);
-      color: var(--text-mid);
-    }
-
-    .preview-count strong {
-      color: var(--brand);
-      font-weight: 700;
-    }
-
-    .clear-btn {
-      font-size: var(--tx-xs);
-      color: var(--text-dim);
-      background: none; border: none;
-      cursor: pointer;
-      font-family: var(--ff-ui);
-      text-decoration: underline;
-      text-underline-offset: 2px;
-      padding: 0;
-      transition: color 0.15s;
-    }
-
-    .clear-btn:hover { color: var(--brand); }
-
-    /* ─── Preview table ───────────────────────────────────────── */
-    .tbl-scroll {
-      overflow-x: auto;
-      overflow-y: auto;
-      max-height: 264px;
-      border: 1px solid var(--border);
-    }
-
-    .preview-tbl {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: var(--tx-xs);
-      font-variant-numeric: tabular-nums;
-    }
-
-    .preview-tbl thead tr { background: var(--brand); }
-
-    .preview-tbl thead th {
-      padding: var(--s2) var(--s3);
-      text-align: left;
-      font-weight: 700;
-      font-size: 10px;
-      letter-spacing: 0.10em;
-      text-transform: uppercase;
-      color: #EDE5E5;
-      white-space: nowrap;
-    }
-
-    .preview-tbl tbody tr {
-      border-bottom: 1px solid var(--border);
-      transition: background 0.10s;
-    }
-
-    .preview-tbl tbody tr:last-child { border-bottom: none; }
-    .preview-tbl tbody tr:hover { background: var(--surface-alt); }
-
-    .preview-tbl td {
-      padding: var(--s2) var(--s3);
-      color: var(--text-mid);
-      vertical-align: middle;
-      max-width: 180px;
-      overflow: hidden;
-      text-overflow: ellipsis;
-      white-space: nowrap;
-    }
-
-    .preview-tbl td:first-child { color: var(--text); font-weight: 400; }
-
-    /* Status indicators */
-    .st {
-      display: inline-flex;
-      align-items: center;
-      gap: 4px;
-      font-size: 10px;
-      font-weight: 700;
-      letter-spacing: 0.04em;
-    }
-
-    .st::before {
-      content: '';
-      display: inline-block;
-      width: 6px; height: 6px;
-      border-radius: 50%;
-    }
-
-    .st.has  { color: #237939; }
-    .st.has::before  { background: var(--ok); }
-    .st.none { color: #907218; }
-    .st.none::before { background: var(--warn); }
-
-    /* ─── Generate button ─────────────────────────────────────── */
-    .generate-btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      gap: var(--s2);
-      width: 100%;
-      margin-top: var(--s6);
-      padding: var(--s4) var(--s6);
-      background: var(--brand);
-      color: #FAF0F0;
-      border: none;
-      font-family: var(--ff-ui);
-      font-size: var(--tx-sm);
-      font-weight: 700;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      cursor: pointer;
-      transition: background 0.18s ease, transform 0.15s ease, box-shadow 0.18s ease;
-    }
-
-    .generate-btn:hover:not(:disabled) {
-      background: var(--brand-dark);
-      transform: translateY(-1px);
-      box-shadow: 0 4px 20px rgba(140,21,21,0.28);
-    }
-
-    .generate-btn:active:not(:disabled) { transform: translateY(0); }
-    .generate-btn:disabled { opacity: 0.6; cursor: not-allowed; }
-
-    /* focus-visible state for accessibility */
-    .generate-btn:focus-visible,
-    .drop-zone:focus-visible {
-      outline: 2px solid var(--brand);
-      outline-offset: 2px;
-    }
-
-    .btn-spinner {
-      display: none;
-      width: 14px; height: 14px;
-      border: 2px solid rgba(250,240,240,0.30);
-      border-top-color: #FAF0F0;
-      border-radius: 50%;
-      animation: spin 0.60s linear infinite;
-      flex-shrink: 0;
-    }
-
-    @keyframes spin { to { transform: rotate(360deg); } }
-
-    .generate-btn.loading .btn-spinner { display: block; }
-    .generate-btn.loading .btn-label { opacity: 0.70; }
-
-    /* ─── Footer ──────────────────────────────────────────────── */
-    .app-footer {
-      margin-top: var(--s8);
-      text-align: center;
-      font-size: var(--tx-xs);
-      color: var(--text-dim);
-      line-height: 1.8;
-    }
-
-    /* ─── Report preview section ──────────────────────────── */
-    #report-preview {
-      max-width: 680px;
-      margin: 0 auto;
-      padding: 0 var(--s6);
-      animation: rise 0.25s ease;
-    }
-
-    .preview-actions {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: var(--s4);
-      padding: var(--s4) var(--s6);
-      margin-bottom: var(--s4);
-      background: var(--surface);
-      border: 1px solid var(--border);
-    }
-
-    .preview-section-label {
-      font-size: var(--tx-xs);
-      font-weight: 700;
-      letter-spacing: 0.10em;
-      text-transform: uppercase;
-      color: var(--text-mid);
-      margin-bottom: var(--s1);
-    }
-
-    .preview-section-sub {
-      font-size: var(--tx-xs);
-      color: var(--text-dim);
-    }
-
-    .download-btn {
-      width: auto;
-      margin: 0;
-      padding: var(--s3) var(--s6);
-      flex-shrink: 0;
-    }
-
-    /* ─── Print / Save as PDF ───────────────────────────────── */
-    @page { size: letter; margin: 14mm 14mm 20mm 14mm; }
-    @media print {
-      body * { visibility: hidden !important; }
-      #print-target, #print-target * { visibility: visible !important; }
-      #print-target {
-        position: absolute !important;
-        inset: 0 !important;
-        width: 100% !important;
-      }
-      .rpt-foot { display: none !important; }
-    }
-  
-/* Site navigation */
-.site-nav {
-  background: #fff;
-  border-bottom: 1px solid #e0d9d0;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  padding: 0 24px;
-  font-family: 'Chivo', system-ui, sans-serif;
-  font-size: 13px;
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'Chivo', system-ui, -apple-system, sans-serif;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #292019;
+  background: #F5F0EB;
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+  margin-left: 240px;
 }
-.site-nav-inner {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  max-width: 680px;
-  width: 100%;
-  margin: 0 auto;
-}
-.site-nav-brand {
-  color: #8C1515;
-  font-weight: 700;
-  text-decoration: none;
-  letter-spacing: .04em;
-  font-size: 12px;
-  text-transform: uppercase;
-}
-.site-nav-links { display: flex; gap: 24px; align-items: center; }
-.site-nav-links a { color: #292019; text-decoration: none; }
-.site-nav-links a:hover { color: #8C1515; }
-.site-nav-links a.active { color: #8C1515; font-weight: 700; }
-.nav-disabled { color: #9C9489; cursor: not-allowed; font-size: 12px; }
 
 /* ── Sidebar ─────────────────────────────── */
-body { margin-left: 240px; }
-.site-nav { display: none !important; }
-
 .sidebar {
   position: fixed; top: 0; left: 0;
   width: 240px; height: 100vh;
-  background: #1C0E0E;
+  background: #3D1A2A;
   display: flex; flex-direction: column;
   padding: 36px 0 28px;
   z-index: 50;
-  font-family: 'Chivo', system-ui, sans-serif;
 }
+a.sidebar-brand { display: block; text-decoration: none; }
 .sidebar-brand {
   padding: 0 24px 28px;
   border-bottom: 1px solid rgba(255,255,255,0.08);
@@ -562,7 +63,7 @@ body { margin-left: 240px; }
   border-left: 3px solid transparent;
   transition: background 0.12s, color 0.12s;
 }
-.sidebar-nav a:hover { background: #2E1818; color: #fff; }
+.sidebar-nav a:hover { background: #512236; color: #fff; }
 .sidebar-nav a.active {
   color: #fff; font-weight: 600;
   border-left-color: #8C1515;
@@ -573,11 +74,190 @@ body { margin-left: 240px; }
   color: rgba(255,255,255,0.22);
   font-size: 11px;
 }
-</style>
+.sidebar-brand-inner {
+  display: flex; align-items: center; gap: 12px;
+}
+.sidebar-mascot {
+  height: 40px; width: auto; flex-shrink: 0;
+}
+
+/* ── Main content ────────────────────────── */
+.content { padding: 56px 52px 64px; max-width: 800px; margin: 0 auto; }
+
+.page-eyebrow {
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: #8C1515; margin-bottom: 10px;
+}
+.page-title {
+  font-family: 'Playfair Display', Georgia, serif;
+  font-size: 32px; font-weight: 600;
+  color: #1A0E0E; line-height: 1.2; margin-bottom: 10px;
+}
+.page-subtitle {
+  font-size: 14px; color: #60574A; margin-bottom: 6px;
+}
+.privacy-note {
+  font-size: 12px; color: #8C1515; margin-bottom: 36px;
+}
+
+/* ── Tool UI ─────────────────────────────── */
+.tool-section {
+  background: #fff;
+  border-radius: 10px;
+  border-top: 3px solid #8C1515;
+  padding: 28px 28px 24px;
+  margin-bottom: 20px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+}
+.section-label {
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.10em; text-transform: uppercase;
+  color: #8C1515; margin-bottom: 14px;
+}
+
+/* Drop zone */
+.drop-zone {
+  border: 2px dashed #D5CEC6;
+  border-radius: 8px;
+  padding: 36px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+  color: #60574A;
+}
+.drop-zone:hover, .drop-zone.drag-over {
+  border-color: #8C1515;
+  background: #FDF7F5;
+}
+.drop-zone input[type="file"] { display: none; }
+.drop-icon { font-size: 32px; margin-bottom: 10px; }
+.drop-primary { font-size: 14px; font-weight: 600; color: #1A0E0E; margin-bottom: 4px; }
+.drop-secondary { font-size: 12px; color: #9C9489; }
+
+.file-chosen {
+  display: none;
+  align-items: center; gap: 12px;
+  padding: 12px 16px;
+  background: #F0F8F0;
+  border-radius: 6px;
+  font-size: 13px; color: #1A5C1A;
+  margin-top: 12px;
+}
+.file-chosen.visible { display: flex; }
+.file-chosen-name { font-weight: 600; }
+
+/* Title input */
+.title-input {
+  width: 100%;
+  padding: 11px 14px;
+  border: 1px solid #D5CEC6;
+  border-radius: 6px;
+  font-family: inherit; font-size: 14px; color: #1A0E0E;
+  background: #FAFAF9;
+  transition: border-color 0.15s;
+  outline: none;
+}
+.title-input:focus { border-color: #8C1515; background: #fff; }
+.title-input::placeholder { color: #B0A89E; }
+
+/* Preview table */
+.preview-section { display: none; }
+.preview-section.visible { display: block; }
+
+.preview-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+.preview-table th {
+  background: #F5F0EB;
+  padding: 8px 12px;
+  text-align: left;
+  font-size: 11px; font-weight: 700;
+  letter-spacing: 0.06em; text-transform: uppercase;
+  color: #60574A;
+  border-bottom: 2px solid #E8E2DA;
+}
+.preview-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #F0EAE2;
+  color: #292019;
+}
+.preview-table tr:last-child td { border-bottom: none; }
+
+.status-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 11px; font-weight: 700;
+}
+.status-badge.complete   { background: #E8F5E9; color: #2E7D32; }
+.status-badge.incomplete { background: #FFF3E0; color: #E65100; }
+
+/* Error */
+.error-msg {
+  display: none;
+  color: #8C1515; font-size: 13px; font-weight: 600;
+  background: #FDF0F0; border: 1px solid #F0C0C0;
+  border-radius: 6px; padding: 10px 14px; margin-top: 12px;
+}
+.error-msg.visible { display: block; }
+
+/* Buttons */
+.download-row {
+  display: flex; gap: 14px; flex-wrap: wrap;
+  margin-top: 8px;
+}
+.btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 22px;
+  border-radius: 7px;
+  font-family: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer; border: none;
+  transition: transform 0.1s, box-shadow 0.1s, background 0.12s;
+  text-decoration: none;
+}
+.btn:active { transform: scale(0.97); }
+.btn-primary {
+  background: #8C1515; color: #fff;
+  box-shadow: 0 2px 8px rgba(140,21,21,0.25);
+}
+.btn-primary:hover { background: #731212; }
+.btn-secondary {
+  background: #60574A; color: #fff;
+  box-shadow: 0 2px 8px rgba(96,87,74,0.2);
+}
+.btn-secondary:hover { background: #4A4037; }
+.btn:disabled {
+  opacity: 0.45; cursor: not-allowed;
+  transform: none; box-shadow: none;
+}
+
+/* Loading */
+.loading { display: none; text-align: center; padding: 20px 0 4px; }
+.loading.visible { display: block; }
+.spinner {
+  border: 3px solid #F5F0EB;
+  border-top: 3px solid #8C1515;
+  border-radius: 50%;
+  width: 32px; height: 32px;
+  animation: spin 0.8s linear infinite;
+  margin: 0 auto 10px;
+}
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+
+/* Footer */
+.page-footer {
+  font-size: 11px; color: #9C9489;
+  border-top: 1px solid #DDD9D2; padding-top: 20px; margin-top: 40px;
+}
+  </style>
 </head>
 <body>
+
 <aside class="sidebar">
-  <div class="sidebar-brand">
+  <a href="/" class="sidebar-brand" style="text-decoration:none;display:block;">
     <div class="sidebar-brand-inner">
       <img src="/mascot.webp" class="sidebar-mascot" alt="">
       <div>
@@ -585,7 +265,7 @@ body { margin-left: 240px; }
         <span class="sb-sub">Development Events Team</span>
       </div>
     </div>
-  </div>
+  </a>
   <nav class="sidebar-nav">
     <a href="/calendar.html">Development Calendar</a>
     <a href="/board-calendar.html">Board Calendar</a>
@@ -595,504 +275,236 @@ body { margin-left: 240px; }
   <div class="sidebar-foot">Hoover Development. Internal Use Only.</div>
 </aside>
 
-<nav class="site-nav">
-  <div class="site-nav-inner">
-    <a class="site-nav-brand" href="/">Hoover Development</a>
-    <div class="site-nav-links">
-      <a href="/calendar.html">Development Calendar</a>
-      <a href="/board-calendar.html">Board Calendar</a>
-      <a href="/bio/" class="active">Bio Report</a>
+<main class="content">
+  <p class="page-eyebrow">Hoover Institution</p>
+  <h1 class="page-title">Event <em>Bio</em> Report</h1>
+  <p class="page-subtitle">Upload a Raiser's Edge export to generate a formatted PDF bio report for your event.</p>
+  <p class="privacy-note">● Files are processed locally — never uploaded or stored</p>
+
+  <!-- Event Name -->
+  <div class="tool-section">
+    <p class="section-label">Event Name</p>
+    <input type="text" class="title-input" id="eventName"
+      placeholder="e.g., Dallas Dinner — May 2026">
+  </div>
+
+  <!-- Upload -->
+  <div class="tool-section">
+    <p class="section-label">Upload Spreadsheet</p>
+    <div class="drop-zone" id="dropZone">
+      <input type="file" id="fileInput" accept=".xlsx,.csv">
+      <div class="drop-icon">📄</div>
+      <div class="drop-primary">Drop your spreadsheet here</div>
+      <div class="drop-secondary">or click to browse — .xlsx or .csv</div>
+    </div>
+    <div class="file-chosen" id="fileChosen">
+      <span>✅</span>
+      <span class="file-chosen-name" id="fileChosenName"></span>
+    </div>
+    <div class="error-msg" id="errorMsg"></div>
+  </div>
+
+  <!-- Preview -->
+  <div class="tool-section preview-section" id="previewSection">
+    <p class="section-label">Preview</p>
+    <table class="preview-table">
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Spouse</th>
+          <th>Fundraiser</th>
+          <th>Bios</th>
+        </tr>
+      </thead>
+      <tbody id="previewBody"></tbody>
+    </table>
+  </div>
+
+  <!-- Generate -->
+  <div class="tool-section">
+    <p class="section-label">Generate PDF</p>
+    <p style="font-size:13px;color:#60574A;margin-bottom:16px;">
+      Report is sorted alphabetically by last name and includes all constituent bios from your export.
+    </p>
+    <div class="download-row">
+      <button class="btn btn-primary" id="generateBtn" disabled>↓ Generate Bio Report PDF</button>
+      <button class="btn btn-secondary" id="clearBtn">Clear</button>
+    </div>
+    <div class="loading" id="loadingIndicator">
+      <div class="spinner"></div>
+      <p style="font-size:13px;color:#60574A;">Generating PDF…</p>
     </div>
   </div>
-</nav>
 
-
-<div class="top-bar" aria-hidden="true"></div>
-
-<div class="app">
-
-  <!-- ── Header ─────────────────────────────────────── -->
-  <header class="app-header">
-    <div class="stanford-mark" aria-label="Stanford University">
-      <div class="mark-dot" aria-hidden="true"></div>
-      <span class="mark-label">Hoover Development</span>
-      <div class="mark-dot" aria-hidden="true"></div>
-    </div>
-
-    <h1 class="app-title">Event <em>Bio</em> Report</h1>
-    <p class="app-desc">Upload a Raiser&rsquo;s Edge export to generate a formatted PDF bio report for your event.</p>
-
-    <div class="privacy-note" aria-live="polite">
-      <div class="privacy-dot" aria-hidden="true"></div>
-      <span>Files are processed locally — never uploaded or stored</span>
-    </div>
-  </header>
-
-  <!-- ── Main card ──────────────────────────────────── -->
-  <main>
-    <div class="card">
-
-      <!-- Event title -->
-      <div>
-        <label class="field-label" for="event-title">Event Name</label>
-        <input
-          type="text"
-          id="event-title"
-          class="text-input"
-          placeholder="e.g. Dallas Dinner — May 2026"
-          autocomplete="off"
-          spellcheck="false"
-          aria-describedby="event-title-hint"
-        >
-        <span id="event-title-hint" class="sr-only">This title will appear in the PDF report header.</span>
-      </div>
-
-      <div class="rule" aria-hidden="true"></div>
-
-      <!-- Drop zone -->
-      <div
-        class="drop-zone"
-        id="drop-zone"
-        role="button"
-        tabindex="0"
-        aria-label="Upload spreadsheet: drag and drop or press Enter to browse"
-      >
-        <input
-          type="file"
-          id="file-input"
-          accept=".xlsx,.csv"
-          aria-hidden="true"
-          tabindex="-1"
-        >
-
-        <!-- File icon -->
-        <svg class="drop-icon" viewBox="0 0 36 36" fill="none" aria-hidden="true">
-          <path d="M9 4h12l9 9v20a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"
-                stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-          <path d="M21 4v9h9" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/>
-          <line x1="12" y1="18" x2="24" y2="18" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="12" y1="23" x2="24" y2="23" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-          <line x1="12" y1="28" x2="18" y2="28" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-        </svg>
-
-        <p class="drop-primary">Drop your spreadsheet here</p>
-        <p class="drop-secondary">or <strong>click to browse</strong> &mdash; .xlsx or .csv</p>
-      </div>
-
-      <!-- Error -->
-      <div class="error-banner" id="error-banner" role="alert" aria-live="assertive"></div>
-
-      <!-- Preview (revealed after successful parse) -->
-      <div class="preview" id="preview">
-        <div class="preview-bar">
-          <span class="preview-count"><strong id="count">0</strong> attendees ready</span>
-          <button class="clear-btn" type="button" onclick="clearFile()">Clear file</button>
-        </div>
-
-        <div class="tbl-scroll" role="region" aria-label="Attendee preview table">
-          <table class="preview-tbl">
-            <thead>
-              <tr>
-                <th scope="col">Name</th>
-                <th scope="col">Spouse</th>
-                <th scope="col">Solicitor</th>
-                <th scope="col">Gen. Bio</th>
-                <th scope="col">Overseer Bio</th>
-                <th scope="col">Code</th>
-              </tr>
-            </thead>
-            <tbody id="preview-body"></tbody>
-          </table>
-        </div>
-
-        <button
-          class="generate-btn"
-          id="generate-btn"
-          type="button"
-          onclick="generatePDF()"
-          aria-label="Generate and download the bio PDF report"
-        >
-          <div class="btn-spinner" aria-hidden="true"></div>
-          <span class="btn-label">Generate PDF Report</span>
-        </button>
-      </div>
-
-    </div><!-- /.card -->
-  </main>
-
-  <section id="report-preview" style="display:none" aria-label="Report preview">
-    <div class="preview-actions">
-      <div>
-        <p class="preview-section-label">Report Preview</p>
-        <p class="preview-section-sub">Review all attendees below, then download.</p>
-      </div>
-      <button id="download-btn" class="generate-btn download-btn" type="button"
-              onclick="downloadPDF()" aria-label="Download the bio PDF report">
-        <div class="btn-spinner" aria-hidden="true"></div>
-        <span class="btn-label">Download PDF</span>
-      </button>
-    </div>
-    <div id="report-preview-content"></div>
-  </section>
-
-  <footer class="app-footer">
-    Built by Renee Choi. Any questions please reach out to <a href="mailto:rtychoi@stanford.edu" style="color:inherit">rtychoi@stanford.edu</a><br>
+  <footer class="page-footer">
+    Built by Renee Choi. Any questions please reach out to <a href="mailto:rtychoi@stanford.edu" style="color:#8C1515;">rtychoi@stanford.edu</a><br>
     All file data is processed locally in your browser. Nothing is transmitted externally.
   </footer>
-
-</div><!-- /.app -->
-
-<!-- Screen-reader utility -->
-<style>.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}</style>
+</main>
 
 <script>
-'use strict';
+const fileInput      = document.getElementById('fileInput');
+const dropZone       = document.getElementById('dropZone');
+const fileChosen     = document.getElementById('fileChosen');
+const fileChosenName = document.getElementById('fileChosenName');
+const previewSection = document.getElementById('previewSection');
+const previewBody    = document.getElementById('previewBody');
+const generateBtn    = document.getElementById('generateBtn');
+const clearBtn       = document.getElementById('clearBtn');
+const errorMsg       = document.getElementById('errorMsg');
+const loadingIndicator = document.getElementById('loadingIndicator');
 
-// ─────────────────────────────────────────────────────────
-// COLUMN MAP  (exact Raiser's Edge export header strings)
-// ─────────────────────────────────────────────────────────
-const COL = {
-  ID:      'Constituent ID',
-  NAME:    'Name',
-  SPOUSE:  'Spouse Name',
-  SOLICIT: 'Assigned Fundraiser Preferred Name',
-  GEN:     'BIO - General Biography - 1 per record Notes',
-  OVER:    'BIO - Overseer Biography - 1 per record Notes',
-  CONST:   'Primary Constituency Code'
-};
+let currentData = [];
 
-// ─────────────────────────────────────────────────────────
-// STATE
-// ─────────────────────────────────────────────────────────
-let records = [];
-
-// ─────────────────────────────────────────────────────────
-// XSS-SAFE HTML ESCAPING
-// All untrusted data from the xlsx file MUST pass through
-// esc() before being placed in innerHTML. The textContent/
-// innerHTML round-trip safely escapes <, >, & and similar.
-// ─────────────────────────────────────────────────────────
-const _escEl = document.createElement('span');
 function esc(str) {
-  _escEl.textContent = str;
-  return _escEl.innerHTML;
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
 }
 
-// ─────────────────────────────────────────────────────────
-// DRAG-AND-DROP + FILE INPUT
-// ─────────────────────────────────────────────────────────
-const dropZone  = document.getElementById('drop-zone');
-const fileInput = document.getElementById('file-input');
+// ── Drag and drop ──────────────────────────────────────────────────────────────
+dropZone.addEventListener('click', () => fileInput.click());
 
-dropZone.addEventListener('dragover',  e => { e.preventDefault(); dropZone.classList.add('over'); });
-dropZone.addEventListener('dragleave', ()  => dropZone.classList.remove('over'));
+dropZone.addEventListener('dragover', e => {
+  e.preventDefault();
+  dropZone.classList.add('drag-over');
+});
+dropZone.addEventListener('dragleave', () => {
+  dropZone.classList.remove('drag-over');
+});
 dropZone.addEventListener('drop', e => {
   e.preventDefault();
-  dropZone.classList.remove('over');
-  const f = e.dataTransfer.files[0];
-  if (f) handleFile(f);
+  dropZone.classList.remove('drag-over');
+  if (e.dataTransfer.files.length > 0) processFile(e.dataTransfer.files[0]);
+});
+fileInput.addEventListener('change', () => {
+  if (fileInput.files.length > 0) processFile(fileInput.files[0]);
 });
 
-fileInput.addEventListener('change', e => {
-  const f = e.target.files[0];
-  if (f) handleFile(f);
-});
-
-// Keyboard accessibility: Enter/Space activates file picker
-dropZone.addEventListener('keydown', e => {
-  if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fileInput.click(); }
-});
-
-// ─────────────────────────────────────────────────────────
-// FILE PROCESSING
-// ─────────────────────────────────────────────────────────
-function handleFile(file) {
-  clearError();
-
-  if (!/\.(xlsx|csv)$/i.test(file.name)) {
-    showError("Please upload an .xlsx or .csv file exported from Raiser's Edge.");
-    return;
-  }
-
+// ── File processing ────────────────────────────────────────────────────────────
+function processFile(file) {
+  errorMsg.classList.remove('visible');
   const reader = new FileReader();
-  reader.onerror = () => showError('Could not read the file. Please try again.');
-  reader.onload  = e => {
+  reader.onload = e => {
     try {
-      const wb   = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-      const ws   = wb.Sheets[wb.SheetNames[0]];
-      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+      const workbook = XLSX.read(e.target.result, { type: 'array' });
+      const sheet    = workbook.Sheets[workbook.SheetNames[0]];
+      const rows     = XLSX.utils.sheet_to_json(sheet);
 
-      if (!rows.length) { showError('The file appears to be empty.'); return; }
+      currentData = rows.map(row => ({
+        name:        row['Constituent Name'] || '',
+        spouse:      row['Spouse Name']       || '',
+        fundraiser:  row['Assigned Fundraiser'] || '',
+        generalBio:  row['General Bio']        || '',
+        overseerBio: row['Overseer Bio']       || '',
+        constituency: row['Constituency Code'] || ''
+      }));
 
-      // Validate the required Name column is present
-      if (!Object.prototype.hasOwnProperty.call(rows[0], COL.NAME)) {
-        showError(
-          'Required column "Name" not found. ' +
-          "Please confirm this is a valid Raiser's Edge export."
-        );
-        return;
-      }
-
-      records = rows
-        .map(r => ({
-          id:        clean(r[COL.ID]),
-          name:      clean(r[COL.NAME]),
-          spouse:    clean(r[COL.SPOUSE]),
-          solicit:   clean(r[COL.SOLICIT]),
-          gen:       clean(r[COL.GEN]),
-          over:      clean(r[COL.OVER]),
-          constCode: mapConst(clean(r[COL.CONST]))
-        }))
-        .filter(r => r.name.length > 0);   // skip blank rows
-
-      if (!records.length) {
-        showError('No attendee names found in the file.');
-        return;
-      }
-
-      renderPreview();
+      fileChosenName.textContent = file.name;
+      fileChosen.classList.add('visible');
+      displayPreview();
+      generateBtn.disabled = false;
     } catch (err) {
-      console.error('[Bio Report] Parse error:', err);
-      if (typeof XLSX === 'undefined') {
-        showError('Spreadsheet library failed to load. Please refresh and try again.');
-      } else {
-        showError('Failed to parse the file (' + (err && err.message ? err.message : String(err)) + '). Please check it is a valid .xlsx or .csv export.');
-      }
+      errorMsg.textContent = 'Error processing file: ' + err.message;
+      errorMsg.classList.add('visible');
     }
   };
-
   reader.readAsArrayBuffer(file);
 }
 
-function clean(v) {
-  return String(v == null ? '' : v).trim();
+function displayPreview() {
+  previewBody.innerHTML = '';
+  currentData.forEach(row => {
+    const hasBios = row.generalBio || row.overseerBio;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td>${esc(row.name)}</td>
+      <td>${esc(row.spouse)}</td>
+      <td>${esc(row.fundraiser)}</td>
+      <td><span class="status-badge ${hasBios ? 'complete' : 'incomplete'}">${hasBios ? '✓ Complete' : '⊗ Missing'}</span></td>
+    `;
+    previewBody.appendChild(tr);
+  });
+  previewSection.classList.add('visible');
 }
 
-function mapConst(v) {
-  switch (v) {
-    case 'Hoover Overseer':                  return 'BOO';
-    case "Director's Circle":                return 'DEV-DC';
-    case 'Hoover Council Leadership Circle': return 'DEV-HCLC';
-    case 'Hoover Council':                   return 'DEV-HC';
-    default:                                 return v ? 'DEV' : '';
-  }
-}
-
-function clearFile() {
-  records = [];
+// ── Clear ──────────────────────────────────────────────────────────────────────
+clearBtn.addEventListener('click', () => {
   fileInput.value = '';
-  document.getElementById('preview').style.display = 'none';
-  document.getElementById('report-preview').style.display = 'none';
-  document.getElementById('report-preview-content').innerHTML = '';
-  clearError();
-}
+  currentData = [];
+  fileChosen.classList.remove('visible');
+  previewSection.classList.remove('visible');
+  previewBody.innerHTML = '';
+  errorMsg.classList.remove('visible');
+  generateBtn.disabled = true;
+});
 
-// ─────────────────────────────────────────────────────────
-// PREVIEW TABLE
-// ─────────────────────────────────────────────────────────
-function renderPreview() {
-  document.getElementById('count').textContent = records.length;
+// ── Generate PDF ───────────────────────────────────────────────────────────────
+generateBtn.addEventListener('click', generatePDF);
 
-  document.getElementById('preview-body').innerHTML = records.map(r => {
-    const g = r.gen  ? '<span class="st has">Present</span>'  : '<span class="st none">None</span>';
-    const o = r.over ? '<span class="st has">Present</span>'  : '<span class="st none">None</span>';
-    const dash = '<span style="opacity:.35" aria-label="none">—</span>';
-    return `<tr>
-      <td>${esc(r.name)}</td>
-      <td>${r.spouse    ? esc(r.spouse)    : dash}</td>
-      <td>${r.solicit   ? esc(r.solicit)   : dash}</td>
-      <td>${g}</td>
-      <td>${o}</td>
-      <td>${r.constCode ? esc(r.constCode) : dash}</td>
-    </tr>`;
-  }).join('');
+function generatePDF() {
+  loadingIndicator.classList.add('visible');
+  generateBtn.disabled = true;
 
-  document.getElementById('preview').style.display = 'block';
-}
+  const eventTitle = document.getElementById('eventName').value.trim();
 
-// ─────────────────────────────────────────────────────────
-// PDF GENERATION
-// ─────────────────────────────────────────────────────────
-async function generatePDF() {
-  const btn   = document.getElementById('generate-btn');
-  btn.classList.add('loading');
-  btn.disabled = true;
-  clearError();
+  const sorted = [...currentData].sort((a, b) => {
+    const lastA = a.name.split(' ').pop().toLowerCase();
+    const lastB = b.name.split(' ').pop().toLowerCase();
+    return lastA.localeCompare(lastB);
+  });
 
-  try {
-    const title    = document.getElementById('event-title').value.trim();
-    const reportEl = buildReportElement(title);
+  let html = `
+    <div style="font-family: Georgia, serif; padding: 24px; line-height: 1.6; color: #1a1a1a;">
+      <h1 style="color: #8C1515; text-align: center; margin-bottom: 4px;">
+        ${eventTitle ? esc(eventTitle) + ' — Bio Report' : 'Bio Report'}
+      </h1>
+      <p style="text-align:center;font-size:12px;color:#666;margin-bottom:28px;">Hoover Institution Development</p>
+  `;
 
-    const contentEl = document.getElementById('report-preview-content');
-    contentEl.innerHTML = '';
-    contentEl.appendChild(reportEl);
+  sorted.forEach(row => {
+    html += `
+      <div style="page-break-inside:avoid;margin-bottom:20px;padding:16px;border:1px solid #ddd;border-left:3px solid #8C1515;border-radius:3px;">
+        <h3 style="color:#8C1515;margin-bottom:4px;">${esc(row.name)}</h3>
+        <div style="font-size:12px;color:#666;margin-bottom:8px;">
+          ${row.spouse      ? `<strong>Spouse:</strong> ${esc(row.spouse)}<br>` : ''}
+          ${row.fundraiser  ? `<strong>Fundraiser:</strong> ${esc(row.fundraiser)}<br>` : ''}
+          ${row.constituency ? `<strong>Constituency:</strong> ${esc(row.constituency)}` : ''}
+        </div>
+        ${row.generalBio   ? `<p style="font-size:13px;color:#333;margin-bottom:6px;"><strong>Bio:</strong> ${esc(row.generalBio)}</p>` : ''}
+        ${row.overseerBio  ? `<p style="font-size:13px;color:#333;"><strong>Overseer Bio:</strong> ${esc(row.overseerBio)}</p>` : ''}
+        ${!row.generalBio && !row.overseerBio ? '<p style="font-size:12px;color:#999;font-style:italic;">No bio on file.</p>' : ''}
+      </div>
+    `;
+  });
 
-    const previewSection = document.getElementById('report-preview');
-    previewSection.style.display = 'block';
-    previewSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  } catch (err) {
-    showError('Failed to build report preview (' + (err && err.message ? err.message : String(err)) + ').');
-  } finally {
-    btn.classList.remove('loading');
-    btn.disabled = false;
-  }
-}
-
-function downloadPDF() {
-  const btn   = document.getElementById('download-btn');
-  const title = document.getElementById('event-title').value.trim();
-
-  const reportEl = document.querySelector('#report-preview-content > div');
-  if (!reportEl) {
-    showError('No report preview found. Please click "Generate PDF Report" first.');
-    return;
-  }
-
-  const prevTitle = document.title;
-  document.title = (title || 'attendee-bios')
-    .replace(/[^\w\s\-–—]/g, '')
-    .replace(/[\s–—]+/g, '-')
-    .replace(/-+/g, '-')
-    .toLowerCase()
-    .substring(0, 80);
-
-  reportEl.id = 'print-target';
-  btn.classList.add('loading');
-  btn.disabled = true;
-
-  window.print();
-
-  reportEl.id = '';
-  document.title = prevTitle;
-  btn.classList.remove('loading');
-  btn.disabled = false;
-}
-
-// ─────────────────────────────────────────────────────────
-// REPORT HTML BUILDER
-// All data from xlsx (r.name, r.spouse, etc.) is passed
-// through esc() before being placed in innerHTML.
-// Structural HTML and CSS is static/trusted — written here.
-// ─────────────────────────────────────────────────────────
-function buildReportElement(title) {
-  const displayTitle = title || 'Event Attendee Biographies';
-  const cssTitle = displayTitle.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/</g, '');
-  const dateStr = new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+  html += `</div>`;
 
   const el = document.createElement('div');
-  // Positioned off-screen so html2canvas can render it
-  el.style.cssText = 'width:680px;background:#fff;';
+  el.innerHTML = html;
+  document.body.appendChild(el);
 
-  // Sort by last name (last space-separated token), then build cards
-  const sorted = [...records].sort((a, b) => {
-    const last = n => n.trim().split(/\s+/).pop().toLowerCase();
-    return last(a.name).localeCompare(last(b.name));
+  const filename = eventTitle
+    ? eventTitle.replace(/[^a-z0-9\-_ ]/gi, '').trim().replace(/\s+/g, '-') + '-bio-report.pdf'
+    : 'bio-report.pdf';
+
+  html2pdf().set({
+    margin: 12,
+    filename,
+    image: { type: 'jpeg', quality: 0.97 },
+    html2canvas: { scale: 2 },
+    jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
+  }).from(el).save().then(() => {
+    document.body.removeChild(el);
+    loadingIndicator.classList.remove('visible');
+    generateBtn.disabled = false;
+  }).catch(err => {
+    document.body.removeChild(el);
+    loadingIndicator.classList.remove('visible');
+    generateBtn.disabled = false;
+    errorMsg.textContent = 'Error generating PDF: ' + err.message;
+    errorMsg.classList.add('visible');
   });
-  const cardsHtml = sorted.map(buildCardHtml).join('');
-
-  // NOTE: esc() is called on every user-supplied value before injection.
-  // The <style> block and structural HTML below are fully static.
-  el.innerHTML = `
-<style>
-  *{box-sizing:border-box;margin:0;padding:0;}
-  .rpt{font-family:Georgia,'Times New Roman',serif;background:#fff;color:#1a110a;}
-  .rpt-head{background:#8C1515;color:#fff;padding:22px 36px 18px;
-    print-color-adjust:exact;-webkit-print-color-adjust:exact;}
-  .rpt-byline{font-family:Arial,Helvetica,sans-serif;font-size:8px;letter-spacing:.20em;
-    text-transform:uppercase;opacity:.65;margin-bottom:6px;font-weight:400;}
-  .rpt-title{font-size:23px;font-weight:300;line-height:1.2;letter-spacing:-.01em;margin-bottom:3px;}
-  .rpt-date{font-family:Arial,Helvetica,sans-serif;font-size:10px;opacity:.60;
-    font-weight:300;letter-spacing:.04em;}
-  .rpt-body{padding:0 36px 36px;}
-  .a-card{padding:16px 0 14px;border-bottom:.75px solid #e4dcd4;page-break-inside:avoid;}
-  .a-card:last-child{border-bottom:none;}
-  .a-top{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:2px;}
-  .a-name{font-size:13.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;}
-  .a-id{font-family:Arial,Helvetica,sans-serif;font-size:8.5px;color:#8B7355;
-    letter-spacing:.06em;flex-shrink:0;margin-left:10px;}
-  .a-meta{font-family:Arial,Helvetica,sans-serif;font-size:9px;color:#5a3a20;
-    margin-bottom:9px;letter-spacing:.02em;}
-  .bio{display:block;margin-bottom:7px;page-break-inside:avoid;}
-  .bio:last-child{margin-bottom:0;}
-  .bio-txt{display:block;font-size:9.5px;line-height:1.65;color:#2c1a0e;font-weight:400;page-break-inside:avoid;}
-  .bio-txt.empty{color:#a08060;font-style:italic;}
-  .rpt-foot{display:flex;justify-content:space-between;align-items:flex-start;
-    font-family:Arial,Helvetica,sans-serif;font-size:7px;color:#a08060;
-    padding:4px 36px 0;margin-top:16px;border-top:.5px solid #e4dcd4;}
-  @page {
-    @bottom-left {
-      content: "*Please see registration list to confirm who is planning to attend this event.\\A ${cssTitle}";
-      font-family: Arial, Helvetica, sans-serif;
-      font-size: 7pt;
-      color: #a08060;
-      vertical-align: top;
-      padding-top: 3pt;
-      white-space: pre-wrap;
-    }
-    @bottom-right {
-      content: "Page " counter(page) " of " counter(pages);
-      font-family: Arial, Helvetica, sans-serif;
-      font-size: 7pt;
-      color: #a08060;
-      vertical-align: top;
-      padding-top: 3pt;
-    }
-  }
-</style>
-<div class="rpt">
-  <div class="rpt-head">
-    <p class="rpt-byline">Hoover Development &mdash; Internal Use Only</p>
-    <h1 class="rpt-title">${esc(displayTitle)}</h1>
-    <p class="rpt-date">${esc(dateStr)}</p>
-  </div>
-  <div class="rpt-body">${cardsHtml}</div>
-  <div class="rpt-foot">
-    <span>
-      <span style="display:block">*Please see registration list to confirm who is planning to attend this event.</span>
-      <span style="display:block">${esc(displayTitle)}</span>
-    </span>
-    <span></span>
-  </div>
-</div>`;
-
-  return el;
-}
-
-function buildCardHtml(r) {
-  const meta = [];
-  if (r.constCode) meta.push('Category: ' + esc(r.constCode));
-  if (r.spouse)    meta.push('Spouse: ' + esc(r.spouse) + '*');
-  if (r.solicit)   meta.push('Solicitor: ' + esc(r.solicit));
-
-  const genHtml = r.gen
-    ? `<p class="bio-txt">${esc(r.gen)}</p>`
-    : `<p class="bio-txt empty">No public information found.</p>`;
-
-  return `
-<div class="a-card">
-  <div class="a-top">
-    <span class="a-name">${esc(r.name)}</span>
-    ${r.id ? `<span class="a-id">ID: ${esc(r.id)}</span>` : ''}
-  </div>
-  ${meta.length ? `<p class="a-meta">${meta.join(' &nbsp;&middot;&nbsp; ')}</p>` : ''}
-  <div class="bio">${genHtml}</div>
-</div>`;
-}
-
-// ─────────────────────────────────────────────────────────
-// ERROR HELPERS
-// textContent is used for error messages — no XSS risk
-// ─────────────────────────────────────────────────────────
-function showError(msg) {
-  const el = document.getElementById('error-banner');
-  el.textContent = msg;
-  el.style.display = 'block';
-}
-
-function clearError() {
-  const el = document.getElementById('error-banner');
-  el.style.display = 'none';
-  el.textContent = '';
 }
 </script>
 </body>
