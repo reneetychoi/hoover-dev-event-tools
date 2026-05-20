@@ -81,6 +81,7 @@ body {
 .sidebar-mascot {
   height: 40px; width: auto; flex-shrink: 0;
 }
+a.sidebar-brand { display: block; text-decoration: none; }
 
 /* ── Main content ────────────────────────── */
 .content { padding: 56px 52px 64px; max-width: 800px; margin: 0 auto; }
@@ -230,7 +231,7 @@ body {
 <body>
 
 <aside class="sidebar">
-  <div class="sidebar-brand">
+  <a href="/" class="sidebar-brand" style="text-decoration:none;display:block;">
     <div class="sidebar-brand-inner">
       <img src="/mascot.webp" class="sidebar-mascot" alt="">
       <div>
@@ -238,7 +239,7 @@ body {
         <span class="sb-sub">Development Events Team</span>
       </div>
     </div>
-  </div>
+  </a>
   <nav class="sidebar-nav">
     <a href="/calendar.html">Development Calendar</a>
     <a href="/board-calendar.html">Board Calendar</a>
