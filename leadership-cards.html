@@ -75,9 +75,15 @@ body {
   color: rgba(255,255,255,0.22);
   font-size: 11px;
 }
+.sidebar-brand-inner {
+  display: flex; align-items: center; gap: 12px;
+}
+.sidebar-mascot {
+  height: 40px; width: auto; flex-shrink: 0;
+}
 
 /* ── Main content ────────────────────────── */
-.content { padding: 56px 52px 64px; max-width: 800px; }
+.content { padding: 56px 52px 64px; max-width: 800px; margin: 0 auto; }
 
 .page-eyebrow {
   font-size: 11px; font-weight: 700;
@@ -225,8 +231,13 @@ body {
 
 <aside class="sidebar">
   <div class="sidebar-brand">
-    <span class="sb-label">Hoover Institution</span>
-    <span class="sb-sub">Development Events Team</span>
+    <div class="sidebar-brand-inner">
+      <img src="/mascot.webp" class="sidebar-mascot" alt="">
+      <div>
+        <span class="sb-label">Hoover Institution</span>
+        <span class="sb-sub">Development Events Team</span>
+      </div>
+    </div>
   </div>
   <nav class="sidebar-nav">
     <a href="/calendar.html">Development Calendar</a>
@@ -240,11 +251,11 @@ body {
 <main class="content">
   <p class="page-eyebrow">Hoover Institution</p>
   <h1 class="page-title">Leadership Card Generator</h1>
-  <p class="page-subtitle">Upload a Smartsheet xlsx export to generate formatted Word leadership cards for your event.</p>
+  <p class="page-subtitle">Upload a leadership card listing xlsx to generate formatted Word leadership cards for your event.</p>
 
   <!-- Step 1: Upload -->
   <div class="tool-section">
-    <p class="section-label">Step 1 — Upload Smartsheet Export</p>
+    <p class="section-label">Step 1 — Upload Leadership Card Listing</p>
     <div class="drop-zone" id="dropZone">
       <input type="file" id="fileInput" accept=".xlsx">
       <div class="drop-icon">📄</div>
@@ -260,7 +271,7 @@ body {
 
   <!-- Step 2: Title -->
   <div class="tool-section">
-    <p class="section-label">Step 2 — Event Title</p>
+    <p class="section-label">Step 2 — Leadership Card Title</p>
     <input type="text" class="title-input" id="titleInput"
       placeholder='e.g., "Leadership in the Desert" or "Miami Leadership"'>
   </div>
@@ -275,7 +286,7 @@ body {
   <div class="tool-section">
     <p class="section-label">Step 3 — Download Cards</p>
     <p style="font-size:13px;color:#60574A;margin-bottom:16px;">
-      Both files will use today's date in the filename. The OVER card contains Overseer Families; the HC+ card contains Director's Circle, HCLC, and Hoover Council.
+      Both files will use today's date in the filename. The OVER card contains Overseer Families; the HC+ card contains Director's Circle, Hoover Council Leadership Circle, and Hoover Council.
     </p>
     <div class="download-row">
       <button class="btn btn-primary" id="btnOver" disabled>
