@@ -196,6 +196,25 @@ a.sidebar-brand { display: block; text-decoration: none; }
 }
 .error-msg.visible { display: block; }
 
+.check-result {
+  display: none;
+  font-size: 13px;
+  padding: 10px 14px;
+  border-radius: 6px;
+  white-space: pre-wrap;
+  margin-top: 8px;
+}
+.check-result.ok {
+  display: block;
+  background: #F0F8F0; color: #1A5C1A;
+  border: 1px solid #B0D8B0;
+}
+.check-result.warn {
+  display: block;
+  background: #FFF8E6; color: #7A5700;
+  border: 1px solid #E6C96A;
+}
+
 /* Download buttons */
 .download-row {
   display: flex; gap: 14px; flex-wrap: wrap;
@@ -360,6 +379,10 @@ a.sidebar-brand { display: block; text-decoration: none; }
       <button class="btn btn-secondary" id="btnHcPlus" disabled>
         ↓ Download HC+ Card (.docx)
       </button>
+    </div>
+    <div id="selfCheckPanel" style="display:none;margin-top:4px;">
+      <div class="check-result" id="overCheck"></div>
+      <div class="check-result" id="hcCheck"></div>
     </div>
   </div>
 
@@ -927,6 +950,10 @@ function processFile(file) {
       showPreview(parsedData.overseers, parsedData.hc_plus);
       enableButtons(true);
       maybeRunComparison();
+      // Reset self-check whenever a new Excel is loaded
+      document.getElementById("selfCheckPanel").style.display = "none";
+      document.getElementById("overCheck").className = "check-result";
+      document.getElementById("hcCheck").className   = "check-result";
     } catch (err) {
       showError(err.message);
       parsedData = null;
@@ -959,6 +986,7 @@ document.getElementById("btnOver").addEventListener("click", async () => {
   try {
     const blob = await buildOverDoc(parsedData.overseers, title, display);
     triggerDownload(blob, `Leadership Card (OVER) ${suffix}.docx`);
+    runSelfCheck(blob, "over");
   } catch (err) {
     showError("Error generating OVER card: " + err.message);
   }
@@ -970,10 +998,78 @@ document.getElementById("btnHcPlus").addEventListener("click", async () => {
   try {
     const blob = await buildHcPlusDoc(parsedData.hc_plus, display);
     triggerDownload(blob, `Leadership Card (HC+) ${suffix}.docx`);
+    runSelfCheck(blob, "hc");
   } catch (err) {
     showError("Error generating HC+ card: " + err.message);
   }
 });
+
+// ─── Couple-name normalisation for comparison ──────────────────────────────────────
+// Institutional keywords — skip couple-swap for these
+const INST_RE = /\b(Foundation|Corporation|Corp\.?|Inc\.?|Ltd\.?|Association|Institute|Bank|Trust)\b/i;
+
+// Wraps normalizeName with couple-name order normalisation so that
+// "Jamie and Bianca Alexander" and "Bianca and Jamie Alexander" produce
+// the same canonical key for Set lookups.
+function normalizeForCompare(n) {
+  let s = normalizeName(n);
+  if (INST_RE.test(s)) return s;
+  const parts = s.split(' and ');
+  if (parts.length !== 2) return s;
+  const [p1, p2] = parts.map(p => p.trim());
+  const p2Words  = p2.split(' ');
+  const lastName = p2Words[p2Words.length - 1];
+  const p1Words  = p1.split(' ');
+  // Detect shared last name:
+  //   p1 is a single word (e.g. 'Bob' in 'Bob and Pamela Goergen')
+  //   or p1 ends with the same word as p2 (e.g. 'Wendy Bingham Cox' ends 'Cox')
+  const hasSharedLast =
+    p1Words.length === 1 ||
+    p1Words[p1Words.length - 1] === lastName;
+  let first1, first2, suffix;
+  if (hasSharedLast) {
+    first1 = p1Words.length > 1 ? p1Words.slice(0, -1).join(' ') : p1;
+    first2 = p2Words.length > 1 ? p2Words.slice(0, -1).join(' ') : p2;
+    suffix = ' ' + lastName;
+  } else {
+    first1 = p1; first2 = p2; suffix = '';
+  }
+  const sorted = [first1, first2].sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  return sorted.join(' and ') + suffix;
+}
+
+// ─── Self-check: verify downloaded card against Excel data ──────────────────────
+async function runSelfCheck(blob, cardType) {
+  const panel = document.getElementById(cardType === 'over' ? 'overCheck' : 'hcCheck');
+  document.getElementById('selfCheckPanel').style.display = '';
+  panel.className = 'check-result ok';
+  panel.textContent = cardType === 'over' ? '⧗ Verifying OVER card…' : '⧗ Verifying HC+ card…';
+  try {
+    const extracted = await parseNamesFromDocx(blob, cardType);
+    const expected  = cardType === 'over'
+      ? parsedData.overseers.map(r => r.name)
+      : HC_PLUS_TIERS.flatMap(t => (parsedData.hc_plus[t] || []).map(r => r.name));
+    const extractedSet = new Set(extracted.map(normalizeForCompare));
+    const expectedSet  = new Set(expected.map(normalizeForCompare));
+    const missing = expected.filter(n => !extractedSet.has(normalizeForCompare(n)));
+    const extra   = extracted.filter(n => !expectedSet.has(normalizeForCompare(n)));
+    const label   = cardType === 'over' ? 'OVER' : 'HC+';
+    if (missing.length === 0 && extra.length === 0) {
+      panel.className = 'check-result ok';
+      panel.textContent = `✓ ${label} card verified — all ${expected.length} names present`;
+    } else {
+      panel.className = 'check-result warn';
+      let msg = `⚠ ${label} card: ${missing.length} name(s) missing from card, ${extra.length} unexpected`;
+      if (missing.length) msg += '\n  Missing: ' + missing.join(' · ');
+      if (extra.length)   msg += '\n  Extra:   ' + extra.join(' · ');
+      panel.textContent = msg;
+    }
+  } catch (err) {
+    panel.className = 'check-result warn';
+    panel.textContent = `⚠ Self-check error: ${err.message}`;
+  }
+}
 
 // ─── Comparison: extract names from a previous DOCX ───────────────────────────
 async function parseNamesFromDocx(file, cardType) {
@@ -1150,15 +1246,15 @@ function runComparison() {
   const currentOverNames = parsedData.overseers.map(r => r.name);
   const currentHcNames   = HC_PLUS_TIERS.flatMap(tier => (parsedData.hc_plus[tier] || []).map(r => r.name));
 
-  const prevOverSet = prevOverNames ? new Set(prevOverNames.map(normalizeName)) : null;
-  const prevHcSet   = prevHcNames   ? new Set(prevHcNames.map(normalizeName))   : null;
-  const currOverSet = new Set(currentOverNames.map(normalizeName));
-  const currHcSet   = new Set(currentHcNames.map(normalizeName));
+  const prevOverSet = prevOverNames ? new Set(prevOverNames.map(normalizeForCompare)) : null;
+  const prevHcSet   = prevHcNames   ? new Set(prevHcNames.map(normalizeForCompare))   : null;
+  const currOverSet = new Set(currentOverNames.map(normalizeForCompare));
+  const currHcSet   = new Set(currentHcNames.map(normalizeForCompare));
 
-  const overAdded   = prevOverNames ? currentOverNames.filter(n => !prevOverSet.has(normalizeName(n))) : null;
-  const overRemoved = prevOverNames ? prevOverNames.filter(n => !currOverSet.has(normalizeName(n)))    : null;
-  const hcAdded     = prevHcNames   ? currentHcNames.filter(n => !prevHcSet.has(normalizeName(n)))    : null;
-  const hcRemoved   = prevHcNames   ? prevHcNames.filter(n => !currHcSet.has(normalizeName(n)))       : null;
+  const overAdded   = prevOverNames ? currentOverNames.filter(n => !prevOverSet.has(normalizeForCompare(n))) : null;
+  const overRemoved = prevOverNames ? prevOverNames.filter(n => !currOverSet.has(normalizeForCompare(n)))    : null;
+  const hcAdded     = prevHcNames   ? currentHcNames.filter(n => !prevHcSet.has(normalizeForCompare(n)))    : null;
+  const hcRemoved   = prevHcNames   ? prevHcNames.filter(n => !currHcSet.has(normalizeForCompare(n)))       : null;
 
   const text = formatComparisonText(overAdded, overRemoved, hcAdded, hcRemoved);
   document.getElementById("compareOutput").textContent = text;
