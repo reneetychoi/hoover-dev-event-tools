@@ -1094,7 +1094,7 @@ async function parseNamesFromDocxCombined(file) {
     if (isUnderlined) {
       // Normalise curly/smart apostrophes (U+2018/2019 etc.) so old DOCX files whose tier
       // headers were typed with Word's smart-quote substitution still match our ASCII set.
-      const headerKey = text.replace(/[''‚‛]/g, "'");
+      const headerKey = text.replace(/[‘’‚‛]/g, "'");
       if (headerKey.startsWith("Overseer Families")) { currentSection = "over"; continue; }
       if (HC_HEADERS.has(headerKey))                 { currentSection = "hc";   continue; }
       // Unrecognised underlined text (e.g. an accidentally-underlined name) —
@@ -1133,21 +1133,32 @@ function formatComparisonText(overAdded, overRemoved, hcAdded, hcRemoved) {
   return parts.join("\n" + divider + "\n\n");
 }
 
+// ─── Name normalisation for comparison ───────────────────────────────────────
+// Collapses Unicode whitespace variants (e.g. NBSP U+00A0) and curly apostrophes
+// so DOCX-extracted names match Excel names under exact-string Set lookup.
+function normalizeName(n) {
+  return n
+    .replace(/[‘’‚‛]/g, "'")   // curly apostrophes -> straight
+    .replace(/[   ​­]/g, ' ')  // special spaces -> regular
+    .replace(/\s+/g, ' ')                                   // collapse whitespace
+    .trim();
+}
+
 function runComparison() {
   if (!parsedData || (!prevOverNames && !prevHcNames)) return;
 
   const currentOverNames = parsedData.overseers.map(r => r.name);
   const currentHcNames   = HC_PLUS_TIERS.flatMap(tier => (parsedData.hc_plus[tier] || []).map(r => r.name));
 
-  const prevOverSet = prevOverNames ? new Set(prevOverNames) : null;
-  const prevHcSet   = prevHcNames   ? new Set(prevHcNames)   : null;
-  const currOverSet = new Set(currentOverNames);
-  const currHcSet   = new Set(currentHcNames);
+  const prevOverSet = prevOverNames ? new Set(prevOverNames.map(normalizeName)) : null;
+  const prevHcSet   = prevHcNames   ? new Set(prevHcNames.map(normalizeName))   : null;
+  const currOverSet = new Set(currentOverNames.map(normalizeName));
+  const currHcSet   = new Set(currentHcNames.map(normalizeName));
 
-  const overAdded   = prevOverNames ? currentOverNames.filter(n => !prevOverSet.has(n)) : null;
-  const overRemoved = prevOverNames ? prevOverNames.filter(n => !currOverSet.has(n))    : null;
-  const hcAdded     = prevHcNames   ? currentHcNames.filter(n => !prevHcSet.has(n))    : null;
-  const hcRemoved   = prevHcNames   ? prevHcNames.filter(n => !currHcSet.has(n))       : null;
+  const overAdded   = prevOverNames ? currentOverNames.filter(n => !prevOverSet.has(normalizeName(n))) : null;
+  const overRemoved = prevOverNames ? prevOverNames.filter(n => !currOverSet.has(normalizeName(n)))    : null;
+  const hcAdded     = prevHcNames   ? currentHcNames.filter(n => !prevHcSet.has(normalizeName(n)))    : null;
+  const hcRemoved   = prevHcNames   ? prevHcNames.filter(n => !currHcSet.has(normalizeName(n)))       : null;
 
   const text = formatComparisonText(overAdded, overRemoved, hcAdded, hcRemoved);
   document.getElementById("compareOutput").textContent = text;
