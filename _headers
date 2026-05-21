@@ -27,7 +27,7 @@
   # style-src 'unsafe-inline'  — allows inline <style> blocks
   #   + fonts.googleapis.com   — Google Fonts stylesheet (calendar + bio tool)
   # font-src fonts.gstatic.com — Google Fonts actual font files
-  # img-src data: blob:        — calendar logo embedded as data: URI; bio tool uses blob:
+  # img-src 'self' data: blob: — 'self' allows favicon files; data: for logo; blob: for bio tool
   # connect-src cdnjs.cloudflare.com — html2pdf.js runtime fetch (bio tool)
   # frame-ancestors 'none'     — belt-and-suspenders with X-Frame-Options
   # base-uri 'none'            — prevent base tag injection
@@ -36,4 +36,4 @@
   # NOTE on 'unsafe-inline': Both tools are static single-file apps with no
   # server-side nonce generation. SRI on CDN scripts guards against supply-chain
   # compromise. 'unsafe-inline' risk is acceptable in this context.
-  Content-Security-Policy: default-src 'none'; script-src 'unsafe-inline' https://cdn.sheetjs.com https://cdnjs.cloudflare.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src data: blob:; connect-src https://cdnjs.cloudflare.com; frame-ancestors 'none'; base-uri 'none'; form-action 'none';
+  Content-Security-Policy: default-src 'none'; script-src 'unsafe-inline' https://cdn.sheetjs.com https://cdnjs.cloudflare.com; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: blob:; connect-src https://cdnjs.cloudflare.com; frame-ancestors 'none'; base-uri 'none'; form-action 'none';
