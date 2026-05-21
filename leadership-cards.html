@@ -995,28 +995,27 @@ function formatComparisonText(overAdded, overRemoved, hcAdded, hcRemoved) {
     return s;
   }
   const divider = "─".repeat(36);
-  return (
-    section("OVERSEER CARD", overAdded, overRemoved) +
-    "\n" + divider + "\n\n" +
-    section("HC+ CARD", hcAdded, hcRemoved)
-  );
+  const parts = [];
+  if (overAdded !== null) parts.push(section("OVERSEER CARD", overAdded, overRemoved));
+  if (hcAdded   !== null) parts.push(section("HC+ CARD",      hcAdded,   hcRemoved));
+  return parts.join("\n" + divider + "\n\n");
 }
 
 function runComparison() {
-  if (!parsedData || !prevOverNames || !prevHcNames) return;
+  if (!parsedData || (!prevOverNames && !prevHcNames)) return;
 
   const currentOverNames = parsedData.overseers.map(r => r.name);
   const currentHcNames   = HC_PLUS_TIERS.flatMap(tier => (parsedData.hc_plus[tier] || []).map(r => r.name));
 
-  const prevOverSet = new Set(prevOverNames);
-  const prevHcSet   = new Set(prevHcNames);
+  const prevOverSet = prevOverNames ? new Set(prevOverNames) : null;
+  const prevHcSet   = prevHcNames   ? new Set(prevHcNames)   : null;
   const currOverSet = new Set(currentOverNames);
   const currHcSet   = new Set(currentHcNames);
 
-  const overAdded   = currentOverNames.filter(n => !prevOverSet.has(n));
-  const overRemoved = prevOverNames.filter(n => !currOverSet.has(n));
-  const hcAdded     = currentHcNames.filter(n => !prevHcSet.has(n));
-  const hcRemoved   = prevHcNames.filter(n => !currHcSet.has(n));
+  const overAdded   = prevOverNames ? currentOverNames.filter(n => !prevOverSet.has(n)) : null;
+  const overRemoved = prevOverNames ? prevOverNames.filter(n => !currOverSet.has(n))    : null;
+  const hcAdded     = prevHcNames   ? currentHcNames.filter(n => !prevHcSet.has(n))    : null;
+  const hcRemoved   = prevHcNames   ? prevHcNames.filter(n => !currHcSet.has(n))       : null;
 
   const text = formatComparisonText(overAdded, overRemoved, hcAdded, hcRemoved);
   document.getElementById("compareOutput").textContent = text;
@@ -1024,7 +1023,7 @@ function runComparison() {
 }
 
 function maybeRunComparison() {
-  if (parsedData && prevOverNames && prevHcNames) runComparison();
+  if (parsedData && (prevOverNames || prevHcNames)) runComparison();
 }
 
 // ─── Comparison: file processing ──────────────────────────────────────────────
