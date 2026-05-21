@@ -1040,11 +1040,7 @@ async function parseNamesFromDocxCombined(file) {
   const xmlDoc = parser.parseFromString(docXmlStr, "application/xml");
   const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
 
-  // All recognised section headers — including (continued) variants
-  const OVER_HEADERS = new Set([
-    "Overseer Families",
-    "Overseer Families (continued)",
-  ]);
+  // HC+ tier headers — exact match including (continued) variants
   const HC_HEADERS = new Set([
     ...HC_PLUS_TIERS,
     ...HC_PLUS_TIERS.map(t => `${t} (continued)`),
@@ -1083,9 +1079,10 @@ async function parseNamesFromDocxCombined(file) {
     });
 
     if (isUnderlined) {
-      if (OVER_HEADERS.has(text))    currentSection = "over";
-      else if (HC_HEADERS.has(text)) currentSection = "hc";
-      else                           currentSection = null;  // unknown header — don't classify
+      // startsWith covers all "Overseer Families..." variants (incl. "Current & Designate", "continued", etc.)
+      if (text.startsWith("Overseer Families"))  currentSection = "over";
+      else if (HC_HEADERS.has(text))             currentSection = "hc";
+      else                                       currentSection = null;  // unknown header — don't classify
       continue;
     }
 
