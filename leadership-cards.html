@@ -1000,11 +1000,19 @@ async function parseNamesFromDocx(file, cardType) {
     }
     if (inTextBox) continue;
 
-    // Skip the anchor paragraph for floating shapes (contains <w:drawing>)
-    if (para.getElementsByTagNameNS(W, "drawing").length > 0) continue;
-
-    // Collect text from all <w:t> runs in this paragraph
+    // Collect text only from <w:t> elements NOT inside a floating text box.
+    // (Drawing-anchor paragraphs that also carry a name — e.g. the last name on an odd
+    //  page where insertContinuedAnnotations embeds a <w:drawing> — are handled correctly:
+    //  the drawing's inner text is filtered out, the real name text is kept.)
     const text = Array.from(para.getElementsByTagNameNS(W, "t"))
+      .filter(t => {
+        let a = t.parentElement;
+        while (a && a !== para) {
+          if (a.localName === "txbxContent") return false;
+          a = a.parentElement;
+        }
+        return true;
+      })
       .map(t => t.textContent).join("").trim();
     if (!text) continue;
 
@@ -1060,10 +1068,16 @@ async function parseNamesFromDocxCombined(file) {
     }
     if (inTextBox) continue;
 
-    // Skip anchor paragraphs for floating shapes
-    if (para.getElementsByTagNameNS(W, "drawing").length > 0) continue;
-
+    // Collect text only from <w:t> elements NOT inside a floating text box.
     const text = Array.from(para.getElementsByTagNameNS(W, "t"))
+      .filter(t => {
+        let a = t.parentElement;
+        while (a && a !== para) {
+          if (a.localName === "txbxContent") return false;
+          a = a.parentElement;
+        }
+        return true;
+      })
       .map(t => t.textContent).join("").trim();
     if (!text) continue;
 
@@ -1078,11 +1092,13 @@ async function parseNamesFromDocxCombined(file) {
     });
 
     if (isUnderlined) {
-      // startsWith covers all "Overseer Families..." variants (incl. "Current & Designate", "continued", etc.)
-      if (text.startsWith("Overseer Families"))  currentSection = "over";
-      else if (HC_HEADERS.has(text))             currentSection = "hc";
-      else                                       currentSection = null;  // unknown header — don't classify
-      continue;
+      // Normalise curly/smart apostrophes (U+2018/2019 etc.) so old DOCX files whose tier
+      // headers were typed with Word's smart-quote substitution still match our ASCII set.
+      const headerKey = text.replace(/[''‚‛]/g, "'");
+      if (headerKey.startsWith("Overseer Families")) { currentSection = "over"; continue; }
+      if (HC_HEADERS.has(headerKey))                 { currentSection = "hc";   continue; }
+      // Unrecognised underlined text (e.g. an accidentally-underlined name) —
+      // keep currentSection unchanged and fall through to name extraction below.
     }
 
     if (currentSection === "over") overNames.push(text);
