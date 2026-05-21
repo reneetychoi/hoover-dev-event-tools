@@ -231,6 +231,44 @@ a.sidebar-brand { display: block; text-decoration: none; }
   font-size: 11px; color: #9C9489;
   border-top: 1px solid #DDD9D2; padding-top: 20px; margin-top: 40px;
 }
+
+/* ── Compare section ─────────────────────────────── */
+.compare-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 4px;
+}
+@media (max-width: 560px) {
+  .compare-grid { grid-template-columns: 1fr; }
+}
+.compare-zone-label {
+  font-size: 12px; font-weight: 700;
+  color: #3D1A2A; margin-bottom: 8px;
+  letter-spacing: 0.04em;
+}
+.compare-results {
+  display: none;
+  margin-top: 24px;
+  border-top: 1px solid #E8E2DA;
+  padding-top: 20px;
+}
+.compare-results.visible { display: block; }
+.compare-output {
+  font-family: 'Chivo', monospace;
+  font-size: 13px; line-height: 1.75;
+  color: #1A0E0E;
+  background: #F9F6F2;
+  border: 1px solid #E0D9CF;
+  border-radius: 7px;
+  padding: 16px 18px;
+  white-space: pre-wrap;
+  margin-bottom: 14px;
+}
+.compare-hint {
+  font-size: 12px; color: #9C9489;
+  margin-top: 10px; font-style: italic;
+}
   </style>
 </head>
 <body>
@@ -301,6 +339,52 @@ a.sidebar-brand { display: block; text-decoration: none; }
       <button class="btn btn-secondary" id="btnHcPlus" disabled>
         ↓ Download HC+ Card (.docx)
       </button>
+    </div>
+  </div>
+
+  <!-- Step 4: Compare -->
+  <div class="tool-section">
+    <p class="section-label">Step 4 — Compare with Previous Card</p>
+    <p style="font-size:13px;color:#60574A;margin-bottom:16px;">
+      Upload the previous event's OVER and HC+ DOCX files to see what names changed. Results appear automatically once all three files are loaded (Steps 1 &amp; 4).
+    </p>
+    <div class="compare-grid">
+      <div>
+        <p class="compare-zone-label">Previous OVER Card (.docx)</p>
+        <div class="drop-zone" id="prevOverDropZone">
+          <input type="file" id="prevOverInput" accept=".docx">
+          <div class="drop-icon">📋</div>
+          <div class="drop-primary">Drop previous OVER card</div>
+          <div class="drop-secondary">or click to browse</div>
+        </div>
+        <div class="file-chosen" id="prevOverChosen">
+          <span>✅</span>
+          <span class="file-chosen-name" id="prevOverChosenName"></span>
+        </div>
+        <div class="error-msg" id="prevOverError"></div>
+      </div>
+      <div>
+        <p class="compare-zone-label">Previous HC+ Card (.docx)</p>
+        <div class="drop-zone" id="prevHcDropZone">
+          <input type="file" id="prevHcInput" accept=".docx">
+          <div class="drop-icon">📋</div>
+          <div class="drop-primary">Drop previous HC+ card</div>
+          <div class="drop-secondary">or click to browse</div>
+        </div>
+        <div class="file-chosen" id="prevHcChosen">
+          <span>✅</span>
+          <span class="file-chosen-name" id="prevHcChosenName"></span>
+        </div>
+        <div class="error-msg" id="prevHcError"></div>
+      </div>
+    </div>
+
+    <div class="compare-results" id="compareResults">
+      <div class="compare-output" id="compareOutput"></div>
+      <button class="btn btn-primary" id="btnCopy" style="margin-top:4px;">
+        📋 Copy to clipboard
+      </button>
+      <p class="compare-hint">Names are matched exactly as they appear in the listing. A spelling change in the source Excel will show as a removal + addition.</p>
     </div>
   </div>
 
@@ -789,6 +873,7 @@ function processFile(file) {
       parsedData = parseXlsx(wb);
       showPreview(parsedData.overseers, parsedData.hc_plus);
       enableButtons(true);
+      maybeRunComparison();
     } catch (err) {
       showError(err.message);
       parsedData = null;
@@ -835,6 +920,175 @@ document.getElementById("btnHcPlus").addEventListener("click", async () => {
   } catch (err) {
     showError("Error generating HC+ card: " + err.message);
   }
+});
+
+// ─── Comparison: extract names from a previous DOCX ───────────────────────────
+async function parseNamesFromDocx(file, cardType) {
+  // cardType: "over" | "hc"
+  const arrayBuffer = await file.arrayBuffer();
+  const zip = await JSZip.loadAsync(arrayBuffer);
+  const docXmlStr = await zip.file("word/document.xml").async("string");
+
+  const parser = new DOMParser();
+  const xmlDoc = parser.parseFromString(docXmlStr, "application/xml");
+  const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+  const allParas = Array.from(xmlDoc.getElementsByTagNameNS(W, "p"));
+  const names = [];
+  let skippedFirstContent = false;  // for OVER card event title
+
+  for (const para of allParas) {
+    // Skip paragraphs inside floating text boxes (date stamps, "continued on the back")
+    let ancestor = para.parentElement;
+    let inTextBox = false;
+    while (ancestor) {
+      if (ancestor.localName === "txbxContent") { inTextBox = true; break; }
+      ancestor = ancestor.parentElement;
+    }
+    if (inTextBox) continue;
+
+    // Skip the anchor paragraph for floating shapes (contains <w:drawing>)
+    if (para.getElementsByTagNameNS(W, "drawing").length > 0) continue;
+
+    // Collect text from all <w:t> runs in this paragraph
+    const text = Array.from(para.getElementsByTagNameNS(W, "t"))
+      .map(t => t.textContent).join("").trim();
+    if (!text) continue;
+
+    // OVER card: first non-empty paragraph is the event title — skip it
+    if (cardType === "over" && !skippedFirstContent) {
+      skippedFirstContent = true;
+      continue;
+    }
+    skippedFirstContent = true;
+
+    // Skip section headers (underlined paragraphs)
+    const uElems = Array.from(para.getElementsByTagNameNS(W, "u"));
+    const isUnderlined = uElems.some(u => {
+      const val = u.getAttribute("w:val");
+      return val && val !== "none" && val !== "false";
+    });
+    if (isUnderlined) continue;
+
+    names.push(text);
+  }
+  return names;
+}
+
+// ─── Comparison: state + logic ────────────────────────────────────────────────
+let prevOverNames = null;
+let prevHcNames   = null;
+
+function formatComparisonText(overAdded, overRemoved, hcAdded, hcRemoved) {
+  function section(title, added, removed) {
+    let s = `${title} — ${added.length} added, ${removed.length} removed\n`;
+    if (added.length === 0 && removed.length === 0) {
+      s += "\n(No changes)\n";
+    } else {
+      if (added.length > 0) {
+        s += "\nAdded:\n" + added.map(n => `• ${n}`).join("\n") + "\n";
+      }
+      if (removed.length > 0) {
+        s += "\nRemoved:\n" + removed.map(n => `• ${n}`).join("\n") + "\n";
+      }
+    }
+    return s;
+  }
+  const divider = "─".repeat(36);
+  return (
+    section("OVERSEER CARD", overAdded, overRemoved) +
+    "\n" + divider + "\n\n" +
+    section("HC+ CARD", hcAdded, hcRemoved)
+  );
+}
+
+function runComparison() {
+  if (!parsedData || !prevOverNames || !prevHcNames) return;
+
+  const currentOverNames = parsedData.overseers.map(r => r.name);
+  const currentHcNames   = HC_PLUS_TIERS.flatMap(tier => (parsedData.hc_plus[tier] || []).map(r => r.name));
+
+  const prevOverSet = new Set(prevOverNames);
+  const prevHcSet   = new Set(prevHcNames);
+  const currOverSet = new Set(currentOverNames);
+  const currHcSet   = new Set(currentHcNames);
+
+  const overAdded   = currentOverNames.filter(n => !prevOverSet.has(n));
+  const overRemoved = prevOverNames.filter(n => !currOverSet.has(n));
+  const hcAdded     = currentHcNames.filter(n => !prevHcSet.has(n));
+  const hcRemoved   = prevHcNames.filter(n => !currHcSet.has(n));
+
+  const text = formatComparisonText(overAdded, overRemoved, hcAdded, hcRemoved);
+  document.getElementById("compareOutput").textContent = text;
+  document.getElementById("compareResults").classList.add("visible");
+}
+
+function maybeRunComparison() {
+  if (parsedData && prevOverNames && prevHcNames) runComparison();
+}
+
+// ─── Comparison: file processing ──────────────────────────────────────────────
+async function processPrevDocx(file, cardType) {
+  const errorId  = cardType === "over" ? "prevOverError"      : "prevHcError";
+  const chosenId = cardType === "over" ? "prevOverChosen"     : "prevHcChosen";
+  const nameId   = cardType === "over" ? "prevOverChosenName" : "prevHcChosenName";
+
+  document.getElementById(errorId).classList.remove("visible");
+
+  if (!file || !file.name.toLowerCase().endsWith(".docx")) {
+    document.getElementById(errorId).textContent = "Please select a .docx file.";
+    document.getElementById(errorId).classList.add("visible");
+    return;
+  }
+
+  document.getElementById(nameId).textContent = file.name;
+  document.getElementById(chosenId).classList.add("visible");
+
+  try {
+    const names = await parseNamesFromDocx(file, cardType);
+    if (cardType === "over") prevOverNames = names;
+    else                      prevHcNames   = names;
+    maybeRunComparison();
+  } catch (err) {
+    document.getElementById(errorId).textContent = "Could not parse DOCX: " + err.message;
+    document.getElementById(errorId).classList.add("visible");
+    if (cardType === "over") prevOverNames = null;
+    else                      prevHcNames   = null;
+  }
+}
+
+// ─── Comparison: UI wiring ────────────────────────────────────────────────────
+const prevOverDrop  = document.getElementById("prevOverDropZone");
+const prevOverInput = document.getElementById("prevOverInput");
+const prevHcDrop    = document.getElementById("prevHcDropZone");
+const prevHcInput   = document.getElementById("prevHcInput");
+
+prevOverDrop.addEventListener("click",    () => prevOverInput.click());
+prevOverInput.addEventListener("change",  e  => processPrevDocx(e.target.files[0], "over"));
+prevOverDrop.addEventListener("dragover", e  => { e.preventDefault(); prevOverDrop.classList.add("drag-over"); });
+prevOverDrop.addEventListener("dragleave",()  => prevOverDrop.classList.remove("drag-over"));
+prevOverDrop.addEventListener("drop",     e  => {
+  e.preventDefault(); prevOverDrop.classList.remove("drag-over");
+  processPrevDocx(e.dataTransfer.files[0], "over");
+});
+
+prevHcDrop.addEventListener("click",    () => prevHcInput.click());
+prevHcInput.addEventListener("change",  e  => processPrevDocx(e.target.files[0], "hc"));
+prevHcDrop.addEventListener("dragover", e  => { e.preventDefault(); prevHcDrop.classList.add("drag-over"); });
+prevHcDrop.addEventListener("dragleave",()  => prevHcDrop.classList.remove("drag-over"));
+prevHcDrop.addEventListener("drop",     e  => {
+  e.preventDefault(); prevHcDrop.classList.remove("drag-over");
+  processPrevDocx(e.dataTransfer.files[0], "hc");
+});
+
+document.getElementById("btnCopy").addEventListener("click", () => {
+  const text = document.getElementById("compareOutput").textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById("btnCopy");
+    const orig = btn.textContent;
+    btn.textContent = "✓ Copied!";
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  });
 });
 </script>
 </body>
