@@ -396,12 +396,11 @@ function processFile(file) {
       const rows     = XLSX.utils.sheet_to_json(sheet);
 
       currentData = rows.map(row => ({
-        name:        row['Constituent Name'] || '',
-        spouse:      row['Spouse Name']       || '',
-        fundraiser:  row['Assigned Fundraiser'] || '',
-        generalBio:  row['General Bio']        || '',
-        overseerBio: row['Overseer Bio']       || '',
-        constituency: row['Constituency Code'] || ''
+        name:        row['Name'] || '',
+        spouse:      row['Spouse Name'] || '',
+        fundraiser:  row['Solicitor'] || '',
+        generalBio:  row['BIO - General Biography - 1 per record Notes'] || '',
+        constituency: row['Group'] || ''
       }));
 
       fileChosenName.textContent = file.name;
@@ -419,7 +418,7 @@ function processFile(file) {
 function displayPreview() {
   previewBody.innerHTML = '';
   currentData.forEach(row => {
-    const hasBios = row.generalBio || row.overseerBio;
+    const hasBios = row.generalBio;
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${esc(row.name)}</td>
@@ -472,12 +471,11 @@ function generatePDF() {
         <h3 style="color:#8C1515;margin-bottom:4px;">${esc(row.name)}</h3>
         <div style="font-size:12px;color:#666;margin-bottom:8px;">
           ${row.spouse      ? `<strong>Spouse:</strong> ${esc(row.spouse)}<br>` : ''}
-          ${row.fundraiser  ? `<strong>Fundraiser:</strong> ${esc(row.fundraiser)}<br>` : ''}
-          ${row.constituency ? `<strong>Constituency:</strong> ${esc(row.constituency)}` : ''}
+          ${row.fundraiser  ? `<strong>Solicitor:</strong> ${esc(row.fundraiser)}<br>` : ''}
+          ${row.constituency ? `<strong>Group:</strong> ${esc(row.constituency)}` : ''}
         </div>
         ${row.generalBio   ? `<p style="font-size:13px;color:#333;margin-bottom:6px;"><strong>Bio:</strong> ${esc(row.generalBio)}</p>` : ''}
-        ${row.overseerBio  ? `<p style="font-size:13px;color:#333;"><strong>Overseer Bio:</strong> ${esc(row.overseerBio)}</p>` : ''}
-        ${!row.generalBio && !row.overseerBio ? '<p style="font-size:12px;color:#999;font-style:italic;">No bio on file.</p>' : ''}
+        ${!row.generalBio ? '<p style="font-size:12px;color:#999;font-style:italic;">No bio on file.</p>' : ''}
       </div>
     `;
   });
