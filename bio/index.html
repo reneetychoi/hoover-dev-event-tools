@@ -13,7 +13,6 @@
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
   <link rel="manifest" href="/site.webmanifest" />
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
   <style>
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -257,6 +256,14 @@ a.sidebar-brand { display: block; text-decoration: none; }
   font-size: 11px; color: #9C9489;
   border-top: 1px solid #DDD9D2; padding-top: 20px; margin-top: 40px;
 }
+
+/* ── Print / Save as PDF ─────────────────── */
+@page { size: letter; margin: 14mm 14mm 20mm 14mm; }
+@media print {
+  body * { visibility: hidden !important; }
+  #printTarget, #printTarget * { visibility: visible !important; }
+  #printTarget { position: absolute !important; inset: 0 !important; width: 100% !important; }
+}
   </style>
 </head>
 <body>
@@ -316,8 +323,8 @@ a.sidebar-brand { display: block; text-decoration: none; }
         <tr>
           <th>Name</th>
           <th>Spouse</th>
-          <th>Fundraiser</th>
-          <th>Bios</th>
+          <th>Solicitor</th>
+          <th>Bio</th>
         </tr>
       </thead>
       <tbody id="previewBody"></tbody>
@@ -328,16 +335,30 @@ a.sidebar-brand { display: block; text-decoration: none; }
   <div class="tool-section">
     <p class="section-label">Generate PDF</p>
     <p style="font-size:13px;color:#60574A;margin-bottom:16px;">
-      Report is sorted alphabetically by last name and includes all constituent bios from your export.
+      Preview the report below, then use your browser's Print → Save as PDF to download.
     </p>
     <div class="download-row">
-      <button class="btn btn-primary" id="generateBtn" disabled>↓ Generate Bio Report PDF</button>
+      <button class="btn btn-primary" id="generateBtn" disabled>⊞ Preview Report</button>
       <button class="btn btn-secondary" id="clearBtn">Clear</button>
     </div>
     <div class="loading" id="loadingIndicator">
       <div class="spinner"></div>
-      <p style="font-size:13px;color:#60574A;">Generating PDF…</p>
+      <p style="font-size:13px;color:#60574A;">Building preview…</p>
     </div>
+  </div>
+
+  <!-- Report Preview -->
+  <div class="tool-section" id="reportPreviewSection" style="display:none;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+      <p class="section-label" style="margin:0;">Report Preview</p>
+      <button class="btn btn-primary" id="downloadBtn" onclick="downloadPDF()">↓ Download PDF</button>
+    </div>
+    <p style="font-size:12px;color:#60574A;margin-bottom:14px;">
+      Review below. To save as PDF: <strong>File → Print → Save as PDF</strong> in Chrome (or Ctrl+P).
+    </p>
+    <div id="reportPreviewContent"
+         style="background:#fff;border:1px solid #E8E2DA;border-radius:4px;
+                max-height:720px;overflow-y:auto;"></div>
   </div>
 
   <footer class="page-footer">
@@ -347,15 +368,15 @@ a.sidebar-brand { display: block; text-decoration: none; }
 </main>
 
 <script>
-const fileInput      = document.getElementById('fileInput');
-const dropZone       = document.getElementById('dropZone');
-const fileChosen     = document.getElementById('fileChosen');
-const fileChosenName = document.getElementById('fileChosenName');
-const previewSection = document.getElementById('previewSection');
-const previewBody    = document.getElementById('previewBody');
-const generateBtn    = document.getElementById('generateBtn');
-const clearBtn       = document.getElementById('clearBtn');
-const errorMsg       = document.getElementById('errorMsg');
+const fileInput        = document.getElementById('fileInput');
+const dropZone         = document.getElementById('dropZone');
+const fileChosen       = document.getElementById('fileChosen');
+const fileChosenName   = document.getElementById('fileChosenName');
+const previewSection   = document.getElementById('previewSection');
+const previewBody      = document.getElementById('previewBody');
+const generateBtn      = document.getElementById('generateBtn');
+const clearBtn         = document.getElementById('clearBtn');
+const errorMsg         = document.getElementById('errorMsg');
 const loadingIndicator = document.getElementById('loadingIndicator');
 
 let currentData = [];
@@ -396,12 +417,15 @@ function processFile(file) {
       const rows     = XLSX.utils.sheet_to_json(sheet);
 
       currentData = rows.map(row => ({
-        name:        row['Name'] || '',
-        spouse:      row['Spouse Name'] || '',
-        fundraiser:  row['Solicitor'] || '',
-        generalBio:  row['BIO - General Biography - 1 per record Notes'] || '',
+        name:         row['Name'] || '',
+        spouse:       row['Spouse Name'] || '',
+        fundraiser:   row['Solicitor'] || '',
+        generalBio:   row['BIO - General Biography - 1 per record Notes'] || '',
         constituency: row['Group'] || ''
-      }));
+      })).sort((a, b) => {
+        const last = n => n.trim().split(/\s+/).pop().toLowerCase();
+        return last(a.name).localeCompare(last(b.name));
+      });
 
       fileChosenName.textContent = file.name;
       fileChosen.classList.add('visible');
@@ -418,13 +442,13 @@ function processFile(file) {
 function displayPreview() {
   previewBody.innerHTML = '';
   currentData.forEach(row => {
-    const hasBios = row.generalBio;
+    const hasBio = row.generalBio;
     const tr = document.createElement('tr');
     tr.innerHTML = `
       <td>${esc(row.name)}</td>
       <td>${esc(row.spouse)}</td>
       <td>${esc(row.fundraiser)}</td>
-      <td><span class="status-badge ${hasBios ? 'complete' : 'incomplete'}">${hasBios ? '✓ Complete' : '⊗ Missing'}</span></td>
+      <td><span class="status-badge ${hasBio ? 'complete' : 'incomplete'}">${hasBio ? '✓ Complete' : '⊗ Missing'}</span></td>
     `;
     previewBody.appendChild(tr);
   });
@@ -440,9 +464,11 @@ clearBtn.addEventListener('click', () => {
   previewBody.innerHTML = '';
   errorMsg.classList.remove('visible');
   generateBtn.disabled = true;
+  document.getElementById('reportPreviewSection').style.display = 'none';
+  document.getElementById('reportPreviewContent').innerHTML = '';
 });
 
-// ── Generate PDF ───────────────────────────────────────────────────────────────
+// ── Preview Report ─────────────────────────────────────────────────────────────
 generateBtn.addEventListener('click', generatePDF);
 
 function generatePDF() {
@@ -451,62 +477,95 @@ function generatePDF() {
 
   const eventTitle = document.getElementById('eventName').value.trim();
 
-  const sorted = [...currentData].sort((a, b) => {
-    const lastA = a.name.split(' ').pop().toLowerCase();
-    const lastB = b.name.split(' ').pop().toLowerCase();
-    return lastA.localeCompare(lastB);
+  try {
+    const reportEl  = buildReportElement(eventTitle);
+    const contentEl = document.getElementById('reportPreviewContent');
+    contentEl.innerHTML = '';
+    contentEl.appendChild(reportEl);
+
+    const rpSection = document.getElementById('reportPreviewSection');
+    rpSection.style.display = 'block';
+    rpSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (err) {
+    errorMsg.textContent = 'Error building preview: ' + err.message;
+    errorMsg.classList.add('visible');
+  } finally {
+    loadingIndicator.classList.remove('visible');
+    generateBtn.disabled = false;
+  }
+}
+
+// ── Download PDF (browser print) ───────────────────────────────────────────────
+function downloadPDF() {
+  const reportEl = document.querySelector('#reportPreviewContent > div');
+  if (!reportEl) return;
+
+  const eventTitle = document.getElementById('eventName').value.trim();
+  const prevTitle  = document.title;
+  document.title   = (eventTitle || 'bio-report')
+    .replace(/[^\w\s\-]/g, '').replace(/\s+/g, '-').toLowerCase();
+
+  reportEl.id = 'printTarget';
+  window.print();
+  reportEl.id = '';
+  document.title = prevTitle;
+}
+
+// ── Report HTML builder ────────────────────────────────────────────────────────
+function buildReportElement(title) {
+  const displayTitle = title || 'Event Attendee Biographies';
+  const dateStr = new Date().toLocaleDateString('en-US', {
+    month: 'long', day: 'numeric', year: 'numeric'
   });
 
-  let html = `
-    <div style="font-family: Georgia, serif; padding: 24px; line-height: 1.6; color: #1a1a1a;">
-      <h1 style="color: #8C1515; text-align: center; margin-bottom: 4px;">
-        ${eventTitle ? esc(eventTitle) + ' — Bio Report' : 'Bio Report'}
-      </h1>
-      <p style="text-align:center;font-size:12px;color:#666;margin-bottom:28px;">Hoover Institution Development</p>
-  `;
+  const cardsHtml = currentData.map(row => {
+    const meta = [];
+    if (row.constituency) meta.push('Group: ' + esc(row.constituency));
+    if (row.spouse)       meta.push('Spouse: ' + esc(row.spouse));
+    if (row.fundraiser)   meta.push('Solicitor: ' + esc(row.fundraiser));
 
-  sorted.forEach(row => {
-    html += `
-      <div style="page-break-inside:avoid;margin-bottom:20px;padding:16px;border:1px solid #ddd;border-left:3px solid #8C1515;border-radius:3px;">
-        <h3 style="color:#8C1515;margin-bottom:4px;">${esc(row.name)}</h3>
-        <div style="font-size:12px;color:#666;margin-bottom:8px;">
-          ${row.spouse      ? `<strong>Spouse:</strong> ${esc(row.spouse)}<br>` : ''}
-          ${row.fundraiser  ? `<strong>Solicitor:</strong> ${esc(row.fundraiser)}<br>` : ''}
-          ${row.constituency ? `<strong>Group:</strong> ${esc(row.constituency)}` : ''}
-        </div>
-        ${row.generalBio   ? `<p style="font-size:13px;color:#333;margin-bottom:6px;"><strong>Bio:</strong> ${esc(row.generalBio)}</p>` : ''}
-        ${!row.generalBio ? '<p style="font-size:12px;color:#999;font-style:italic;">No bio on file.</p>' : ''}
-      </div>
-    `;
-  });
+    const bioHtml = row.generalBio
+      ? `<p class="bio-txt">${esc(row.generalBio)}</p>`
+      : `<p class="bio-txt empty">No bio on file.</p>`;
 
-  html += `</div>`;
+    return `
+<div class="a-card">
+  <p class="a-name">${esc(row.name)}</p>
+  ${meta.length ? `<p class="a-meta">${meta.join(' &nbsp;&middot;&nbsp; ')}</p>` : ''}
+  <div class="bio">${bioHtml}</div>
+</div>`;
+  }).join('');
 
   const el = document.createElement('div');
-  el.innerHTML = html;
-  document.body.appendChild(el);
+  el.innerHTML = `
+<style>
+  .rpt *{box-sizing:border-box;margin:0;padding:0;}
+  .rpt{font-family:Georgia,'Times New Roman',serif;background:#fff;color:#1a110a;padding-bottom:24px;}
+  .rpt-head{background:#8C1515;color:#fff;padding:22px 36px 18px;
+    print-color-adjust:exact;-webkit-print-color-adjust:exact;}
+  .rpt-byline{font-family:Arial,sans-serif;font-size:8px;letter-spacing:.18em;
+    text-transform:uppercase;opacity:.65;margin-bottom:6px;}
+  .rpt-title{font-size:22px;font-weight:300;line-height:1.2;margin-bottom:3px;}
+  .rpt-date{font-family:Arial,sans-serif;font-size:10px;opacity:.60;letter-spacing:.04em;}
+  .rpt-body{padding:0 36px 24px;}
+  .a-card{padding:15px 0 13px;border-bottom:.75px solid #e4dcd4;page-break-inside:avoid;}
+  .a-card:last-child{border-bottom:none;}
+  .a-name{font-size:13px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;margin-bottom:2px;}
+  .a-meta{font-family:Arial,sans-serif;font-size:9px;color:#5a3a20;margin-bottom:8px;letter-spacing:.02em;}
+  .bio{page-break-inside:avoid;}
+  .bio-txt{font-size:9.5px;line-height:1.65;color:#2c1a0e;}
+  .bio-txt.empty{color:#a08060;font-style:italic;}
+</style>
+<div class="rpt">
+  <div class="rpt-head">
+    <p class="rpt-byline">Hoover Development &mdash; Internal Use Only</p>
+    <h1 class="rpt-title">${esc(displayTitle)}</h1>
+    <p class="rpt-date">${esc(dateStr)}</p>
+  </div>
+  <div class="rpt-body">${cardsHtml}</div>
+</div>`;
 
-  const filename = eventTitle
-    ? eventTitle.replace(/[^a-z0-9\-_ ]/gi, '').trim().replace(/\s+/g, '-') + '-bio-report.pdf'
-    : 'bio-report.pdf';
-
-  html2pdf().set({
-    margin: 12,
-    filename,
-    image: { type: 'jpeg', quality: 0.97 },
-    html2canvas: { scale: 2 },
-    jsPDF: { orientation: 'portrait', unit: 'mm', format: 'a4' }
-  }).from(el).save().then(() => {
-    document.body.removeChild(el);
-    loadingIndicator.classList.remove('visible');
-    generateBtn.disabled = false;
-  }).catch(err => {
-    document.body.removeChild(el);
-    loadingIndicator.classList.remove('visible');
-    generateBtn.disabled = false;
-    errorMsg.textContent = 'Error generating PDF: ' + err.message;
-    errorMsg.classList.add('visible');
-  });
+  return el;
 }
 </script>
 </body>
