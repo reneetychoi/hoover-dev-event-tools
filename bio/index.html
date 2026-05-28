@@ -417,15 +417,13 @@ function processFile(file) {
       const rows     = XLSX.utils.sheet_to_json(sheet);
 
       currentData = rows.map(row => ({
-        name:         row['Name'] || '',
+        name:         ((row['First Name'] || '') + ' ' + (row['Last Name'] || '')).trim(),
+        lastName:     (row['Last Name'] || '').toLowerCase(),
         spouse:       row['Spouse Name'] || '',
         fundraiser:   row['Solicitor'] || '',
         generalBio:   row['BIO - General Biography - 1 per record Notes'] || '',
         constituency: row['Group'] || ''
-      })).sort((a, b) => {
-        const last = n => n.trim().split(/\s+/).pop().toLowerCase();
-        return last(a.name).localeCompare(last(b.name));
-      });
+      })).sort((a, b) => a.lastName.localeCompare(b.lastName));
 
       fileChosenName.textContent = file.name;
       fileChosen.classList.add('visible');
