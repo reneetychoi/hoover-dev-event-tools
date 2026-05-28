@@ -503,10 +503,27 @@ function downloadPDF() {
   document.title   = (eventTitle || 'bio-report')
     .replace(/[^\w\s\-]/g, '').replace(/\s+/g, '-').toLowerCase();
 
+  const safeTitle = (eventTitle || '').replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  const footerStyle = document.createElement('style');
+  footerStyle.textContent = `
+    @page {
+      @bottom-left {
+        content: "*Please see registration list to confirm who is planning to attend this event.\\A ${safeTitle}";
+        font-family: Arial, sans-serif; font-size: 8px; color: #555;
+        white-space: pre; vertical-align: top;
+      }
+      @bottom-right {
+        content: "Page " counter(page) " of " counter(pages);
+        font-family: Arial, sans-serif; font-size: 8px; color: #555;
+      }
+    }`;
+  document.head.appendChild(footerStyle);
+
   reportEl.id = 'printTarget';
   window.print();
   reportEl.id = '';
   document.title = prevTitle;
+  document.head.removeChild(footerStyle);
 }
 
 // ── Report HTML builder ────────────────────────────────────────────────────────
@@ -519,7 +536,7 @@ function buildReportElement(title) {
   const cardsHtml = currentData.map(row => {
     const meta = [];
     if (row.constituency) meta.push('Group: ' + esc(row.constituency));
-    if (row.spouse)       meta.push('Spouse: ' + esc(row.spouse));
+    if (row.spouse)       meta.push('Spouse: ' + esc(row.spouse) + '*');
     if (row.fundraiser)   meta.push('Solicitor: ' + esc(row.fundraiser));
 
     const bioHtml = row.generalBio
