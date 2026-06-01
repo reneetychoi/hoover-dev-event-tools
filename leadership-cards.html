@@ -1012,7 +1012,7 @@ const INST_RE = /\b(Foundation|Corporation|Corp\.?|Inc\.?|Ltd\.?|Association|Ins
 // "Jamie and Bianca Alexander" and "Bianca and Jamie Alexander" produce
 // the same canonical key for Set lookups.
 function normalizeForCompare(n) {
-  let s = normalizeName(n).replace(/\s+&\s+/g, ' and ');
+  let s = normalizeName(n).replace(/\s+&\s+/g, ' and ').replace(/,\s*(Jr\.?|Sr\.?|II|III|IV|V)/gi, ' $1');
   if (INST_RE.test(s)) return s;
   const parts = s.split(' and ');
   if (parts.length !== 2) return s;
@@ -1037,6 +1037,22 @@ function normalizeForCompare(n) {
   const sorted = [first1, first2].sort((a, b) =>
     a.localeCompare(b, undefined, { sensitivity: 'base' }));
   return sorted.join(' and ') + suffix;
+}
+
+function altNormalizeForCompare(n) {
+  let s = normalizeName(n).replace(/\s+&\s+/g, ' and ').replace(/,\s*(Jr\.?|Sr\.?|II|III|IV|V)/gi, ' $1');
+  if (INST_RE.test(s)) return null;
+  const parts = s.split(' and ');
+  if (parts.length !== 2) return null;
+  const [p1, p2] = parts.map(p => p.trim());
+  const p2Words = p2.split(' ');
+  if (p2Words.length !== 2) return null;
+  const p1Words = p1.split(' ');
+  if (p1Words.length === 1) return null;
+  if (p1Words[p1Words.length - 1] === p2Words[p2Words.length - 1]) return null;
+  const first1 = p1, first2 = p2Words[0], suffix = ' ' + p2Words[1];
+  const altSorted = [first1, first2].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
+  return altSorted.join(' and ') + suffix;
 }
 
 // ─── Self-check: verify downloaded card against Excel data ──────────────────────
@@ -1303,9 +1319,10 @@ function formatComparisonText(overAdded, overRemoved, hcAdded, hcRemoved) {
 // so DOCX-extracted names match Excel names under exact-string Set lookup.
 function normalizeName(n) {
   return n
-    .replace(/[‘’‚‛]/g, "'")   // curly apostrophes -> straight
-    .replace(/[   ​­]/g, ' ')  // special spaces -> regular
-    .replace(/\s+/g, ' ')                                   // collapse whitespace
+    .replace(/[‘’‚‛]/g, "'")
+    .replace(/[­﻿​‌‍‎‏⁠]/g, '')
+    .replace(/[               　]/g, ' ')
+    .replace(/\s+/g, ' ')
     .trim();
 }
 
@@ -1315,34 +1332,47 @@ function runComparison() {
   const currentOverNames = parsedData.overseers.map(r => r.name);
   const currentHcNames   = HC_PLUS_TIERS.flatMap(tier => (parsedData.hc_plus[tier] || []).map(r => r.name));
 
-  const prevOverSet = prevOverNames ? new Set(prevOverNames.map(x => normalizeForCompare(x.name))) : null;
-  const prevHcSet   = prevHcNames   ? new Set(prevHcNames.map(x => normalizeForCompare(x.name)))   : null;
-  const currOverSet = new Set(currentOverNames.map(normalizeForCompare));
-  const currHcSet   = new Set(currentHcNames.map(normalizeForCompare));
+  function allForms(name) {
+    const forms = [normalizeForCompare(name)];
+    const alt = altNormalizeForCompare(name);
+    if (alt && alt !== forms[0]) forms.push(alt);
+    return forms;
+  }
+
+  const prevOverSet = prevOverNames ? new Set(prevOverNames.flatMap(x => allForms(x.name))) : null;
+  const prevHcSet   = prevHcNames   ? new Set(prevHcNames.flatMap(x => allForms(x.name)))   : null;
+  const currOverSet = new Set(currentOverNames.flatMap(allForms));
+  const currHcSet   = new Set(currentHcNames.flatMap(allForms));
 
   function getTierForCurrentHcName(name) {
-    const norm = normalizeForCompare(name);
+    const forms = allForms(name);
     for (const tier of HC_PLUS_TIERS) {
-      if ((parsedData.hc_plus[tier] || []).some(r => normalizeForCompare(r.name) === norm))
+      if ((parsedData.hc_plus[tier] || []).some(r => forms.some(k => k === normalizeForCompare(r.name))))
         return tier;
     }
     return null;
   }
 
+  console.log('[comparison] prevOverNames[0]:', JSON.stringify(prevOverNames?.[0]));
+
   const overAdded   = prevOverNames
-    ? currentOverNames.filter(n => !prevOverSet.has(normalizeForCompare(n)))
+    ? currentOverNames
+        .filter(n => !allForms(n).some(k => prevOverSet.has(k)))
         .map(n => ({ name: n, tier: "Overseer Families" }))
     : null;
   const overRemoved = prevOverNames
-    ? prevOverNames.filter(x => !currOverSet.has(normalizeForCompare(x.name)))
+    ? prevOverNames.filter(x => !allForms(x.name).some(k => currOverSet.has(k)))
     : null;
   const hcAdded = prevHcNames
-    ? currentHcNames.filter(n => !prevHcSet.has(normalizeForCompare(n)))
+    ? currentHcNames
+        .filter(n => !allForms(n).some(k => prevHcSet.has(k)))
         .map(n => ({ name: n, tier: getTierForCurrentHcName(n) }))
     : null;
   const hcRemoved = prevHcNames
-    ? prevHcNames.filter(x => !currHcSet.has(normalizeForCompare(x.name)))
+    ? prevHcNames.filter(x => !allForms(x.name).some(k => currHcSet.has(k)))
     : null;
+
+  console.log('[comparison] overAdded[0]:', JSON.stringify(overAdded?.[0]));
 
   const text = formatComparisonText(overAdded, overRemoved, hcAdded, hcRemoved);
   document.getElementById("compareOutput").textContent = text;
