@@ -1354,16 +1354,6 @@ function runComparison() {
   }
 
   console.log('[comparison] prevHcNamesWithNullTier:', prevHcNames?.filter(x => !x.tier).map(x => x.name));
-  if (hcAdded && hcAdded.length > 0) {
-    const _n = hcAdded[0].name;
-    console.log('[debug] first hcAdded:', _n, '→ forms:', allForms(_n));
-    console.log('[debug] char codes:', Array.from(_n).map(c => 'U+' + c.charCodeAt(0).toString(16).toUpperCase().padStart(4,'0')).join(' '));
-  }
-  if (hcRemoved && hcRemoved.length > 0) {
-    const _x = hcRemoved[0];
-    console.log('[debug] first hcRemoved:', _x.name, '→ forms:', allForms(_x.name));
-    console.log('[debug] char codes:', Array.from(_x.name).map(c => 'U+' + c.charCodeAt(0).toString(16).toUpperCase().padStart(4,'0')).join(' '));
-  }
 
   const overAdded   = prevOverNames
     ? currentOverNames
@@ -1382,7 +1372,16 @@ function runComparison() {
     ? prevHcNames.filter(x => !allForms(x.name).some(k => currHcSet.has(k)))
     : null;
 
-
+  if (hcAdded && hcAdded.length > 0) {
+    const _n = hcAdded[0].name;
+    console.log('[debug] first hcAdded:', _n, '→ forms:', allForms(_n));
+    console.log('[debug] char codes:', Array.from(_n).map(c => 'U+' + c.charCodeAt(0).toString(16).toUpperCase().padStart(4,'0')).join(' '));
+  }
+  if (hcRemoved && hcRemoved.length > 0) {
+    const _x = hcRemoved[0];
+    console.log('[debug] first hcRemoved:', _x.name, '→ forms:', allForms(_x.name));
+    console.log('[debug] char codes:', Array.from(_x.name).map(c => 'U+' + c.charCodeAt(0).toString(16).toUpperCase().padStart(4,'0')).join(' '));
+  }
 
   const text = formatComparisonText(overAdded, overRemoved, hcAdded, hcRemoved);
   document.getElementById("compareOutput").textContent = text;
