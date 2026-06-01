@@ -1012,7 +1012,7 @@ const INST_RE = /\b(Foundation|Corporation|Corp\.?|Inc\.?|Ltd\.?|Association|Ins
 // "Jamie and Bianca Alexander" and "Bianca and Jamie Alexander" produce
 // the same canonical key for Set lookups.
 function normalizeForCompare(n) {
-  let s = normalizeName(n);
+  let s = normalizeName(n).replace(/\s+&\s+/g, ' and ');
   if (INST_RE.test(s)) return s;
   const parts = s.split(' and ');
   if (parts.length !== 2) return s;
@@ -1132,6 +1132,66 @@ async function parseNamesFromDocx(file, cardType) {
   return names;
 }
 
+// ─── Comparison: extract names + tier labels from a previous DOCX ─────────────
+// Returns [{name, tier}] — used for the comparison diff (not for self-check).
+// For cardType "over": tier is always "Overseer Families".
+// For cardType "hc": tier is whichever HC_PLUS_TIERS section header was last seen.
+async function parseNamesFromDocxWithTiers(file, cardType) {
+  const arrayBuffer = await file.arrayBuffer();
+  const zip = await JSZip.loadAsync(arrayBuffer);
+  const docXmlStr = await zip.file("word/document.xml").async("string");
+
+  const parser = new DOMParser();
+  const xmlDoc = parser.parseFromString(docXmlStr, "application/xml");
+  const W = "http://schemas.openxmlformats.org/wordprocessingml/2006/main";
+
+  const allParas = Array.from(xmlDoc.getElementsByTagNameNS(W, "p"));
+  const results = [];
+  let skippedFirstContent = false;
+  let currentTier = cardType === "over" ? "Overseer Families" : null;
+
+  for (const para of allParas) {
+    let ancestor = para.parentElement;
+    let inTextBox = false;
+    while (ancestor) {
+      if (ancestor.localName === "txbxContent") { inTextBox = true; break; }
+      ancestor = ancestor.parentElement;
+    }
+    if (inTextBox) continue;
+
+    const text = Array.from(para.getElementsByTagNameNS(W, "t"))
+      .filter(t => {
+        let a = t.parentElement;
+        while (a && a !== para) {
+          if (a.localName === "txbxContent") return false;
+          a = a.parentElement;
+        }
+        return true;
+      })
+      .map(t => t.textContent).join("").trim();
+    if (!text) continue;
+
+    if (!skippedFirstContent) { skippedFirstContent = true; continue; }
+
+    const uElems = Array.from(para.getElementsByTagNameNS(W, "u"));
+    const isUnderlined = uElems.some(u => {
+      const val = u.getAttribute("w:val");
+      return val && val !== "none" && val !== "false";
+    });
+
+    if (isUnderlined) {
+      if (cardType === "hc") {
+        const headerKey = text.replace(/[''‚‛]/g, "'").replace(/\s*\(continued\)\s*$/i, '').trim();
+        if (HC_PLUS_TIERS.includes(headerKey)) currentTier = headerKey;
+      }
+      continue;
+    }
+
+    results.push({ name: text, tier: currentTier });
+  }
+  return results;
+}
+
 // ─── Comparison: extract names from a single combined DOCX (OVER + HC+) ────────
 async function parseNamesFromDocxCombined(file) {
   // Returns { overNames: [], hcNames: [] } by reading section headers to classify names.
@@ -1151,6 +1211,7 @@ async function parseNamesFromDocxCombined(file) {
 
   const allParas = Array.from(xmlDoc.getElementsByTagNameNS(W, "p"));
   let currentSection = null;   // "over" | "hc" | null
+  let currentHcTier  = null;
   let skippedTitle   = false;
   const overNames = [], hcNames = [];
 
@@ -1192,13 +1253,18 @@ async function parseNamesFromDocxCombined(file) {
       // headers were typed with Word's smart-quote substitution still match our ASCII set.
       const headerKey = text.replace(/[‘’‚‛]/g, "'");
       if (headerKey.startsWith("Overseer Families")) { currentSection = "over"; continue; }
-      if (HC_HEADERS.has(headerKey))                 { currentSection = "hc";   continue; }
+      if (HC_HEADERS.has(headerKey)) {
+        currentSection = "hc";
+        const baseTier = headerKey.replace(/\s*\(continued\)\s*$/i, '').trim();
+        if (HC_PLUS_TIERS.includes(baseTier)) currentHcTier = baseTier;
+        continue;
+      }
       // Unrecognised underlined text (e.g. an accidentally-underlined name) —
       // keep currentSection unchanged and fall through to name extraction below.
     }
 
-    if (currentSection === "over") overNames.push(text);
-    else if (currentSection === "hc") hcNames.push(text);
+    if (currentSection === "over") overNames.push({ name: text, tier: "Overseer Families" });
+    else if (currentSection === "hc") hcNames.push({ name: text, tier: currentHcTier });
   }
   return { overNames, hcNames };
 }
@@ -1208,16 +1274,19 @@ let prevOverNames = null;
 let prevHcNames   = null;
 
 function formatComparisonText(overAdded, overRemoved, hcAdded, hcRemoved) {
+  function formatEntry(x) {
+    return x.tier ? `• ${x.name} (${x.tier})` : `• ${x.name}`;
+  }
   function section(title, added, removed) {
     let s = `${title} — ${added.length} added, ${removed.length} removed\n`;
     if (added.length === 0 && removed.length === 0) {
       s += "\n(No changes)\n";
     } else {
       if (added.length > 0) {
-        s += "\nAdded:\n" + added.map(n => `• ${n}`).join("\n") + "\n";
+        s += "\nAdded:\n" + added.map(formatEntry).join("\n") + "\n";
       }
       if (removed.length > 0) {
-        s += "\nRemoved:\n" + removed.map(n => `• ${n}`).join("\n") + "\n";
+        s += "\nRemoved:\n" + removed.map(formatEntry).join("\n") + "\n";
       }
     }
     return s;
@@ -1246,15 +1315,34 @@ function runComparison() {
   const currentOverNames = parsedData.overseers.map(r => r.name);
   const currentHcNames   = HC_PLUS_TIERS.flatMap(tier => (parsedData.hc_plus[tier] || []).map(r => r.name));
 
-  const prevOverSet = prevOverNames ? new Set(prevOverNames.map(normalizeForCompare)) : null;
-  const prevHcSet   = prevHcNames   ? new Set(prevHcNames.map(normalizeForCompare))   : null;
+  const prevOverSet = prevOverNames ? new Set(prevOverNames.map(x => normalizeForCompare(x.name))) : null;
+  const prevHcSet   = prevHcNames   ? new Set(prevHcNames.map(x => normalizeForCompare(x.name)))   : null;
   const currOverSet = new Set(currentOverNames.map(normalizeForCompare));
   const currHcSet   = new Set(currentHcNames.map(normalizeForCompare));
 
-  const overAdded   = prevOverNames ? currentOverNames.filter(n => !prevOverSet.has(normalizeForCompare(n))) : null;
-  const overRemoved = prevOverNames ? prevOverNames.filter(n => !currOverSet.has(normalizeForCompare(n)))    : null;
-  const hcAdded     = prevHcNames   ? currentHcNames.filter(n => !prevHcSet.has(normalizeForCompare(n)))    : null;
-  const hcRemoved   = prevHcNames   ? prevHcNames.filter(n => !currHcSet.has(normalizeForCompare(n)))       : null;
+  function getTierForCurrentHcName(name) {
+    const norm = normalizeForCompare(name);
+    for (const tier of HC_PLUS_TIERS) {
+      if ((parsedData.hc_plus[tier] || []).some(r => normalizeForCompare(r.name) === norm))
+        return tier;
+    }
+    return null;
+  }
+
+  const overAdded   = prevOverNames
+    ? currentOverNames.filter(n => !prevOverSet.has(normalizeForCompare(n)))
+        .map(n => ({ name: n, tier: "Overseer Families" }))
+    : null;
+  const overRemoved = prevOverNames
+    ? prevOverNames.filter(x => !currOverSet.has(normalizeForCompare(x.name)))
+    : null;
+  const hcAdded = prevHcNames
+    ? currentHcNames.filter(n => !prevHcSet.has(normalizeForCompare(n)))
+        .map(n => ({ name: n, tier: getTierForCurrentHcName(n) }))
+    : null;
+  const hcRemoved = prevHcNames
+    ? prevHcNames.filter(x => !currHcSet.has(normalizeForCompare(x.name)))
+    : null;
 
   const text = formatComparisonText(overAdded, overRemoved, hcAdded, hcRemoved);
   document.getElementById("compareOutput").textContent = text;
@@ -1283,7 +1371,7 @@ async function processPrevDocx(file, cardType) {
   document.getElementById(chosenId).classList.add("visible");
 
   try {
-    const names = await parseNamesFromDocx(file, cardType);
+    const names = await parseNamesFromDocxWithTiers(file, cardType);
     if (cardType === "over") prevOverNames = names;
     else                      prevHcNames   = names;
     maybeRunComparison();
