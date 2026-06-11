@@ -102,7 +102,30 @@ a.sidebar-brand { display: block; text-decoration: none; }
   font-size: 14px; color: #60574A; margin-bottom: 6px;
 }
 .privacy-note {
-  font-size: 12px; color: #8C1515; margin-bottom: 36px;
+  font-size: 12px; color: #8C1515; margin-bottom: 20px;
+}
+
+/* Onboarding banner */
+.bio-onboard {
+  display: flex; align-items: center; gap: 16px; margin-bottom: 36px;
+}
+.onboard-mascot { width: 96px; height: auto; flex-shrink: 0; }
+.onboard-bubble {
+  position: relative;
+  background: #fff; border-radius: 14px; border-left: 3px solid #8C1515;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.04);
+  padding: 14px 18px; font-size: 13px; line-height: 1.55; color: #292019;
+}
+.onboard-bubble::before {            /* speech tail pointing left to mascot */
+  content: ''; position: absolute; left: -8px; top: 26px;
+  border-width: 8px 8px 8px 0; border-style: solid;
+  border-color: transparent #fff transparent transparent;
+}
+.onboard-bubble a { color: #8C1515; font-weight: 700; text-decoration: underline; }
+.onboard-bubble a:hover { color: #731212; }
+@media (max-width: 560px) {
+  .bio-onboard { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .onboard-bubble::before { display: none; }
 }
 
 /* ── Tool UI ─────────────────────────────── */
@@ -291,6 +314,19 @@ a.sidebar-brand { display: block; text-decoration: none; }
   <h1 class="page-title">Event Bio Report Generator</h1>
   <p class="page-subtitle">Upload a Raiser's Edge export to generate a formatted PDF bio report for your event.</p>
   <p class="privacy-note">● Files are processed locally — never uploaded or stored</p>
+
+  <!-- Onboarding banner -->
+  <div class="bio-onboard">
+    <img src="/mascot.webp" class="onboard-mascot" alt="Hoover Tower mascot">
+    <div class="onboard-bubble">
+      <strong>New to the Event Bio tool?</strong>
+      Download the
+      <a href="/Event-Bio-Process-Document.pdf" download="Process Document for Event Bio Report.pdf">process doc</a>
+      and the
+      <a href="/Event-Bio-Template.xlsm" download="Event Bio Template.xlsm">event bio template</a>
+      to start!
+    </div>
+  </div>
 
   <!-- Event Name -->
   <div class="tool-section">
